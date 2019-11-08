@@ -195,16 +195,17 @@ class broEnv(gym.Env):
 	def render(self, mode='human', close=True):
 		time0 = self.values0_init[:,0]
 		value0 = self.inv_decay(self.values0_init[:,1],self.values0_init[:,0], 0.9)
-		plt.scatter(time0, value0, color='b', alpha=1.0, label="Uncompressed")
+		sub = plt.subplot()
+		sub.scatter(time0, value0, color='b', alpha=1.0, label="Uncompressed")
 
 		time1 = self.values1_init[:,0]
 		value1 = self.inv_decay(self.values1_init[:,1],self.values1_init[:,0], 0.9)
-		plt.scatter(time1, value1, color='r', alpha=1.0, label="Compressed")
+		sub.scatter(time1, value1, color='r', alpha=1.0, label="Compressed")
 
-		plt.title('Age vs Value')
-		plt.xlabel('Age')
-		plt.ylabel('Value')
-		plt.legend(loc=2)
+		sub.set_title('Age vs Initial Value')
+		sub.set_xlabel('Age')
+		sub.set_ylabel('Value')
+		sub.legend(loc=2)
 		plt.show()
 		plt.close()
 
