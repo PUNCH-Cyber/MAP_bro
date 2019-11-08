@@ -184,7 +184,7 @@ class broEnv(gym.Env):
 				self.df1.loc[rep_row] = dns_line
 		
 		self.decay_step(self.values0_init[:,1], 0.9)
-		self.decay_step(self.values1_init[:,1], 0.9)
+		self.decay_step(self.values1_init[:,1], 0.95)
 
 		self.values0_init[:,0] += 1
 		self.values1_init[:,0] += 1
