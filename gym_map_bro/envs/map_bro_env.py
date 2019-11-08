@@ -109,10 +109,32 @@ class broEnv(gym.Env):
     def inv_decay(self, val, n):
         return val*0.9**(-n)
     
-    # The time step is where the time labels are increased by 1 and the values are decayed
-    def time_step(self):
+    # The time step is where we complete the actions recommended by the agent.
+    # 1. Loop through recommendations and apply to database
+    # 2. Time labels are increased by 1 and the values are decayed
+    # 3. Values are applied to initial for next batch
+    def time_step(self, batch, values, actions):
+        self.batch_reset()
+        
+        for i in range(0,self.N_batch):
+            if(actions[i] == 0):
+                # Find the row we want to replace
+                rep_row = np.argmin(self.values0_init, axis=0)[1]
+                
+                # Replace the value row
+                self.values0_init[rep_row, 1] = values[i]
+
+                # Replace the database row
+                dns_batch = pandas.read_csv("dns.log")
+                dns_line = dns_batch.values[i]
+                self.df0.loc[rep_row] = dns_line
+                print(self.values0_init, values[i])
+        
         self.values0[:,1] = self.decay_step(self.values0[:,1])
         self.values0[:,0] += 1
+
+        new_values = self.values0
+        self.values0_init = new_values
 
     def render(self, mode='human', close=False):
         time = self.values0[:,0]
