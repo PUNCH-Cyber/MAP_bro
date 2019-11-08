@@ -50,10 +50,9 @@ def delayed_reward_agent(env, batch, lr, y, num_episodes):
 	return Q, rList
 
 # Train the agent on a new batch of values, print the final results
-def batch_load(env, batch, values):
+def batch_load(env, batch, values, num_episodes):
 	lr = .9
 	y = .95
-	num_episodes = 100
 	Q, rList = delayed_reward_agent(env, values, lr, y, num_episodes)
 	#print(Q)
 
