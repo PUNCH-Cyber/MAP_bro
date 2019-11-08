@@ -49,6 +49,21 @@ def delayed_reward_agent(env, batch, lr, y, num_episodes):
 		rList.append(rAll)
 	return Q, rList
 
+# Train the agent on a new batch of values, print the final results
+def batch_load(env, batch, values):
+	lr = .9
+	y = .95
+	num_episodes = 10
+	Q, rList = delayed_reward_agent(env, values, lr, y, num_episodes)
+	#print(Q)
+
+	# Determine best actions for the batch
+	batch_actions = np.argmax(Q, axis=1)
+	#print(batch_actions[0:5])
+
+	# Perform the recommended actions
+	env.time_step(batch, values, batch_actions[0:5])
+
 '''def greedy_agent(env, lr, y, num_episodes):
 	Q = np.zeros([env.observation_space.n,env.action_space.n])
 	# Set learning parameters
