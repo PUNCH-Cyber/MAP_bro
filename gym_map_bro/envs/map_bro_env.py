@@ -21,6 +21,7 @@ class broEnv(gym.Env):
 		self.index = np.arange(N_database)
 		self.col = pandas.read_csv("dns.col")
 		self.df0 = pandas.DataFrame(index=self.index, columns=self.col.columns)
+		self.df1 = pandas.DataFrame(index=self.index, columns=self.col.columns)
 		self.values0 = np.zeros((N_database,2))
 		self.values0_init = np.zeros((N_database,2))
 		self.step_num = 0
@@ -33,8 +34,9 @@ class broEnv(gym.Env):
 							init_s = np.array([])):	# Initial database values (needs database initialization)
 		# Actions #
 		# 0 = Save
-		# 1 = Delete
-		self.action_space = spaces.Discrete(2)
+		# 1 = Compress
+		# 2 = Delete
+		self.action_space = spaces.Discrete(3)
 		
 		# Define size variables
 		self.N_database = N_database
@@ -49,6 +51,7 @@ class broEnv(gym.Env):
 		self.col = col
 		# Define the blank DataFrame
 		self.df0 = pandas.DataFrame(index=index, columns=col.columns)
+		self.df1 = pandas.DataFrame(index=index, columns=col.columns)
 		
 		# Define value table for the database
 		# 0: Time since row was added
