@@ -1,0 +1,1 @@
+uid,src,sport,dst,dport,proto,trans_id,rtt,query,qclass,qclass_name,qtype,qtype_name,rcode,rcode_name,Z,answers,TTLs,AA,TC,RD,RA,rejected,ts

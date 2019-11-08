@@ -1,0 +1,14 @@
+uid,src,sport,dst,dport,proto,trans_id,rtt,query,qclass,qclass_name,qtype,qtype_name,rcode,rcode_name,Z,answers,TTLs,AA,TC,RD,RA,rejected,ts
+CghXHv4P9sybq1dnL,192.168.202.100,45658,192.168.27.203,137,udp,33008,"",*\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00,1,C_INTERNET,33,NBSTAT,0,NOERROR,1,"","",false,false,false,false,false,1331901005
+C4SrUv2XNVcWGxMKA4,192.168.202.100,45658,192.168.27.202,137,udp,33008,"",*\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00,1,C_INTERNET,33,NBSTAT,0,NOERROR,1,"","",false,false,false,false,false,1331901024
+CTySHd36MODzjqHEh,192.168.202.76,137,192.168.202.255,137,udp,57398,"",WPAD,1,C_INTERNET,32,NB,"","",1,"","",false,false,true,false,false,1331901005
+CTySHd36MODzjqHEh,192.168.202.76,137,192.168.202.255,137,udp,57398,"",WPAD,1,C_INTERNET,32,NB,"","",1,"","",false,false,true,false,false,1331901006
+CTySHd36MODzjqHEh,192.168.202.76,137,192.168.202.255,137,udp,57398,"",WPAD,1,C_INTERNET,32,NB,"","",1,"","",false,false,true,false,false,1331901007
+CTySHd36MODzjqHEh,192.168.202.76,137,192.168.202.255,137,udp,57402,"",HPE8AA67,1,C_INTERNET,32,NB,"","",1,"","",false,false,true,false,false,1331901015
+CTySHd36MODzjqHEh,192.168.202.76,137,192.168.202.255,137,udp,57402,"",HPE8AA67,1,C_INTERNET,32,NB,"","",1,"","",false,false,true,false,false,1331901015
+CTySHd36MODzjqHEh,192.168.202.76,137,192.168.202.255,137,udp,57402,"",HPE8AA67,1,C_INTERNET,32,NB,"","",1,"","",false,false,true,false,false,1331901016
+CHXHpA4nUz74G27Tne,192.168.202.89,137,192.168.202.255,137,udp,62187,"",EWREP1,1,C_INTERNET,32,NB,"","",1,"","",false,false,true,false,false,1331901006
+CHXHpA4nUz74G27Tne,192.168.202.89,137,192.168.202.255,137,udp,62187,"",EWREP1,1,C_INTERNET,32,NB,"","",1,"","",false,false,true,false,false,1331901007
+CHXHpA4nUz74G27Tne,192.168.202.89,137,192.168.202.255,137,udp,62187,"",EWREP1,1,C_INTERNET,32,NB,"","",1,"","",false,false,true,false,false,1331901007
+Cvvzlb2vT3Iqc6MtB3,192.168.202.89,137,10.7.136.159,137,udp,62190,"",*\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00,1,C_INTERNET,33,NBSTAT,"","",0,"","",false,false,false,false,false,1331901007
+Cvvzlb2vT3Iqc6MtB3,192.168.202.89,137,10.7.136.159,137,udp,62190,"",*\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00,1,C_INTERNET,33,NBSTAT,"","",0,"","",false,false,false,false,false,1331901008

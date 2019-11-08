@@ -1,3 +1,17 @@
 
 .DS_Store
 .ipynb_checkpoints/examples-checkpoint.ipynb
+gym_map.egg-info/dependency_links.txt
+gym_map.egg-info/PKG-INFO
+gym_map.egg-info/requires.txt
+gym_map.egg-info/SOURCES.txt
+gym_map.egg-info/top_level.txt
+*.pyc
+gym_map_bro.egg-info/top_level.txt
+gym_map_bro.egg-info/SOURCES.txt
+gym_map_bro.egg-info/requires.txt
+gym_map_bro.egg-info/PKG-INFO
+gym_map_bro.egg-info/dependency_links.txt
+gym_map_bro/env/.ipynb_checkpoints/map_env-checkpoint.py
+gym_map_bro/envs/.ipynb_checkpoints/map_env-checkpoint.py
+.ipynb_checkpoints/pandas_tests-checkpoint.ipynb
