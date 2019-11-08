@@ -19,12 +19,15 @@ class broEnv(gym.Env):
 		N_batch = 1
 		self.N_database = N_database
 		self.N_batch = N_batch
-		self.index = np.arange(N_database)
+		self.index0 = np.arange(N_database)
+		self.index1 = np.arange(2*N_database)
 		self.col = pandas.read_csv("dns.col")
-		self.df0 = pandas.DataFrame(index=self.index, columns=self.col.columns)
-		self.df1 = pandas.DataFrame(index=self.index, columns=self.col.columns)
+		self.df0 = pandas.DataFrame(index=self.index0, columns=self.col.columns)
+		self.df1 = pandas.DataFrame(index=self.index1, columns=self.col.columns)
 		self.values0 = np.zeros((N_database,2))
-		self.values0_init = np.zeros((N_database,2))
+		self.values0_init = np.zeros((2*N_database,2))
+		self.values1 = np.zeros((N_database,2))
+		self.values1_init = np.zeros((2*N_database,2))
 		self.step_num = 0
 		self.observation_space = spaces.Discrete(N_batch)
 		pass
@@ -36,7 +39,8 @@ class broEnv(gym.Env):
 		# Actions #
 		# 0 = Save
 		# 1 = Compress
-		# 2 = Delete
+		# 2 = Move + Compress
+		# 3 = Delete
 		self.action_space = spaces.Discrete(3)
 
 		# Compression value fraction
@@ -48,26 +52,26 @@ class broEnv(gym.Env):
 		
 		# Define the (blank) database
 		# N_database blank rows
-		index = np.arange(N_database)
-		self.index = index
+		self.index0 = np.arange(N_database)
+		self.index1 = np.arange(2*N_database)
 		# Read the column names from dns.col
 		col = pandas.read_csv("dns.col")
 		self.col = col
 		# Define the blank DataFrames
 		# df0 is for "saving" while df1 is for "compressing"
-		self.df0 = pandas.DataFrame(index=index, columns=col.columns)
-		self.df1 = pandas.DataFrame(index=index, columns=col.columns)
+		self.df0 = pandas.DataFrame(index=self.index0, columns=col.columns)
+		self.df1 = pandas.DataFrame(index=self.index1, columns=col.columns)
 		
 		# Define value table for the database
 		# 0: Time since row was added
 		# 1: Positive reward for adding the row to the table
 		if len(init_s) == 0:
 			self.values0 = np.zeros((N_database,2))
-			self.values1 = np.zeros((N_database,2))
+			self.values1 = np.zeros((2*N_database,2))
 
 			# Make copy of initial value table before playing the game
 			self.values0_init = np.zeros((N_database,2))
-			self.values1_init = np.zeros((N_database,2))
+			self.values1_init = np.zeros((2*N_database,2))
 		else:
 			self.values0 = init_s[0]
 			self.values1 = init_s[1]
@@ -85,8 +89,8 @@ class broEnv(gym.Env):
 	def reset(self):
 		self.step_num = 0
 
-		self.df0 = pandas.DataFrame(index=self.index, columns=self.col.columns)
-		self.df1 = pandas.DataFrame(index=self.index, columns=self.col.columns)
+		self.df0 = pandas.DataFrame(index=self.index0, columns=self.col.columns)
+		self.df1 = pandas.DataFrame(index=self.index1, columns=self.col.columns)
 
 		self.values0 = np.zeros((self.N_database,2))
 		self.values1 = np.zeros((self.N_database,2))
@@ -129,7 +133,18 @@ class broEnv(gym.Env):
 			discount_value = self.compress_frac*value
 			reward = discount_value - old_val
 			self.values1[val_arg][1] = discount_value
-		elif(action == 2):	# Delete with negative value reward
+		if(action == 2):	# Save to df0 with full reward
+			# Find lowest value entry in each table
+			val_arg0 = np.argmin(self.values0, axis=0)[1]
+			old_val0 = self.values0[val_arg0][1]
+			val_arg1 = np.argmin(self.values1, axis=0)[1]
+			old_val1 = self.values1[val_arg1][1]
+
+			# Reward is new value plus compressed value minus lost value
+			reward = value + self.compress_frac*old_val0 - old_val1
+			self.values1[val_arg1][1] = self.compress_frac*self.values0[val_arg0][1]
+			self.values0[val_arg0][1] = value
+		elif(action == 3):	# Delete with negative value reward
 			reward = -value
 		
 		return reward
@@ -167,8 +182,8 @@ class broEnv(gym.Env):
 				self.values0_init[rep_row, 1] = values[i]
 
 				# Replace the database row
-				dns_batch = pandas.read_csv("dns.log")
-				dns_line = dns_batch.values[i]
+				#dns_batch = pandas.read_csv("dns.log")
+				dns_line = batch.values[i]
 				self.df0.loc[rep_row] = dns_line
 			if(actions[i] == 1):
 				# Find the row we want to replace
@@ -179,9 +194,29 @@ class broEnv(gym.Env):
 				self.values1_init[rep_row, 1] = self.compress_frac*values[i]
 
 				# Replace the database row
-				dns_batch = pandas.read_csv("dns.log")
-				dns_line = dns_batch.values[i]
+				#dns_batch = pandas.read_csv("dns.log")
+				dns_line = batch.values[i]
 				self.df1.loc[rep_row] = dns_line
+			if(actions[i] == 2):
+				# Find the rows in each table we work with
+				rep_row0 = np.argmin(self.values0_init, axis=0)[1]
+				rep_row1 = np.argmin(self.values1_init, axis=0)[1]
+				
+				# Compress the firt sentry
+				self.values1_init[rep_row1, 0] = self.values0_init[rep_row0, 0]
+				self.values1_init[rep_row1, 1] = self.compress_frac*self.values0_init[rep_row0, 1]
+
+				# Replace the first entry
+				self.values0_init[rep_row0, 0] = 0
+				self.values0_init[rep_row0, 1] = values[i]
+
+				# Replace the compressed database row
+				self.df1.loc[rep_row1] = self.df0.loc[rep_row0]
+
+				# Replace the database row
+				#dns_batch = pandas.read_csv("dns.log")
+				dns_line = batch.values[i]
+				self.df0.loc[rep_row0] = dns_line
 		
 		self.decay_step(self.values0_init[:,1], 0.9)
 		self.decay_step(self.values1_init[:,1], 0.95)
@@ -192,32 +227,33 @@ class broEnv(gym.Env):
 		#new_values = self.values0
 		#self.values0_init = new_values
 	
-	def render(self, mode='human', close=True):
+	def render(self, mode='human', out=0, close=True):
 		time0 = self.values0_init[:,0]
 		value0 = self.inv_decay(self.values0_init[:,1],self.values0_init[:,0], 0.9)
-		sub = plt.subplot()
-		sub.scatter(time0, value0, color='b', alpha=1.0, label="Uncompressed")
-
 		time1 = self.values1_init[:,0]
 		value1 = self.inv_decay(self.values1_init[:,1],self.values1_init[:,0], 0.9)
-		sub.scatter(time1, value1, color='r', alpha=1.0, label="Compressed")
+		
+		if(out == 0):
+			sub = plt.subplot()
+			sub.scatter(time0, value0, color='b', alpha=1.0, label="Uncompressed")
+			sub.scatter(time1, value1, color='r', alpha=1.0, label="Compressed")
 
-		sub.set_title('Age vs Initial Value')
-		sub.set_xlabel('Age')
-		sub.set_ylabel('Value')
-		sub.legend(loc=2)
-		plt.show()
-		plt.close()
+			sub.set_title('Age vs Initial Value')
+			sub.set_xlabel('Age')
+			sub.set_ylabel('Value')
+			sub.legend(loc=2)
+			plt.show()
+			plt.close()
+		elif(out == 1):
+			print_df = self.df0.copy()
+			print_df['age'] = time0
+			print_df['value'] = value0
+			print("Uncompressed Database:")
+			print(print_df[['uid', 'src', 'sport', 'age', 'value']])
 
-		print_df = self.df0.copy()
-		print_df['age'] = time0
-		print_df['value'] = value0
-		print("Uncompressed Database:")
-		print(print_df[['uid', 'src', 'sport', 'dst', 'age', 'value']])
-
-		print_df = self.df1.copy()
-		print_df['age'] = time1
-		print_df['value'] = value1
-		print("Compressed Database:")
-		print(print_df[['uid', 'src', 'sport', 'dst', 'age', 'value']])
+			print_df = self.df1.copy()
+			print_df['age'] = time1
+			print_df['value'] = value1
+			print("Compressed Database:")
+			print(print_df[['uid', 'src', 'sport', 'age', 'value']])
 		return 0

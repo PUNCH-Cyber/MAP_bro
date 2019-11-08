@@ -53,7 +53,7 @@ def delayed_reward_agent(env, batch, lr, y, num_episodes):
 def batch_load(env, batch, values):
 	lr = .9
 	y = .95
-	num_episodes = 10
+	num_episodes = 100
 	Q, rList = delayed_reward_agent(env, values, lr, y, num_episodes)
 	#print(Q)
 
