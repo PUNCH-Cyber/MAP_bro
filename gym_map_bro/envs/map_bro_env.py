@@ -83,6 +83,9 @@ class broEnv(gym.Env):
 		# A single step is trying to save/delete/etc. a single line from the batch
 		self.step_num = 0
 		self.observation_space = spaces.Discrete(N_batch)
+
+		self.deleted = pandas.DataFrame(index=[], columns=col.columns)
+		self.del_val = []
 		pass
 		
 	# Full reset. Reset steps, database, and values
@@ -177,6 +180,9 @@ class broEnv(gym.Env):
 				# Find the row we want to replace
 				rep_row = np.argmin(self.values0_init, axis=0)[1]
 				
+				if(self.values0_init[rep_row, 0] != 0):
+					self.del_val.append(self.values0_init[rep_row])
+
 				# Replace the value row
 				self.values0_init[rep_row, 0] = 0
 				self.values0_init[rep_row, 1] = values[i]
@@ -188,7 +194,10 @@ class broEnv(gym.Env):
 			if(actions[i] == 1):
 				# Find the row we want to replace
 				rep_row = np.argmin(self.values1_init, axis=0)[1]
-				
+
+				if(self.values1_init[rep_row, 0] != 0):
+					self.del_val.append(self.values1_init[rep_row])
+
 				# Replace the value row
 				self.values1_init[rep_row, 0] = 0
 				self.values1_init[rep_row, 1] = self.compress_frac*values[i]
@@ -201,6 +210,9 @@ class broEnv(gym.Env):
 				# Find the rows in each table we work with
 				rep_row0 = np.argmin(self.values0_init, axis=0)[1]
 				rep_row1 = np.argmin(self.values1_init, axis=0)[1]
+
+				if(self.values1_init[rep_row1, 0] != 0):
+					self.del_val.append(self.values1_init[rep_row1])
 				
 				# Compress the firt sentry
 				self.values1_init[rep_row1, 0] = self.values0_init[rep_row0, 0]
@@ -217,7 +229,9 @@ class broEnv(gym.Env):
 				#dns_batch = pandas.read_csv("dns.log")
 				dns_line = batch.values[i]
 				self.df0.loc[rep_row0] = dns_line
-		
+			#else:
+				#dns_line = batch.values[i]
+				#self.deleted.append(dns_line)
 		self.decay_step(self.values0_init[:,1], 0.9)
 		self.decay_step(self.values1_init[:,1], 0.95)
 
@@ -232,11 +246,14 @@ class broEnv(gym.Env):
 		value0 = self.inv_decay(self.values0_init[:,1],self.values0_init[:,0], 0.9)
 		time1 = self.values1_init[:,0]
 		value1 = self.inv_decay(self.values1_init[:,1],self.values1_init[:,0], 0.9)
-		
+
 		if(out == 0):
 			sub = plt.subplot()
 			sub.scatter(time0, value0, color='b', alpha=1.0, label="Uncompressed")
 			sub.scatter(time1, value1, color='r', alpha=1.0, label="Compressed")
+			x_val = [x[0] for x in self.del_val]
+			y_val = [x[1] for x in self.del_val]
+			sub.scatter(np.array(x_val),-np.array(y_val),color="g", label="Deleted")
 
 			sub.set_title('Age vs Initial Value')
 			sub.set_xlabel('Age')

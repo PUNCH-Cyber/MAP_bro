@@ -31,7 +31,7 @@ def delayed_reward_agent(env, batch, lr, y, num_episodes):
 			#Choose an action by greedily (with noise) picking from Q table
 			epsilon = 1./(i+1.)
 			rand = np.random.uniform(1.0)
-			if(rand < epsilon):
+			if(rand > epsilon):
 				a = np.argmax(Q[s,:])
 			else:
 				a = np.random.choice(env.action_space.n)
@@ -49,21 +49,7 @@ def delayed_reward_agent(env, batch, lr, y, num_episodes):
 		rList.append(rAll)
 	return Q, rList
 
-# Train the agent on a new batch of values, print the final results
-def batch_load(env, batch, values, num_episodes):
-	lr = .9
-	y = .95
-	Q, rList = delayed_reward_agent(env, values, lr, y, num_episodes)
-	#print(Q)
-
-	# Determine best actions for the batch
-	batch_actions = np.argmax(Q, axis=1)
-	#print(batch_actions[0:5])
-
-	# Perform the recommended actions
-	env.time_step(batch, values, batch_actions[0:5])
-
-'''def greedy_agent(env, lr, y, num_episodes):
+def greedy_agent(env, batch, lr, y, num_episodes):
 	Q = np.zeros([env.observation_space.n,env.action_space.n])
 	# Set learning parameters
 	#create lists to contain total rewards and steps per episode
@@ -71,7 +57,7 @@ def batch_load(env, batch, values, num_episodes):
 	rList = []
 	for i in range(num_episodes):
 		#Reset environment and get first new observation
-		s = env.reset()
+		s = env.batch_reset()
 		rAll = 0
 		d = False
 		j = 0
@@ -79,10 +65,15 @@ def batch_load(env, batch, values, num_episodes):
 		while j < 99:
 			j+=1
 			#Choose an action by greedily (with noise) picking from Q table
-			a = np.argmax(Q[s,:] + np.random.randn(1,env.action_space.n)*(1./(i+1)))
+			epsilon = 1./(i+1.)
+			rand = np.random.uniform(1.0)
+			if(rand > epsilon):
+				a = np.argmax(Q[s,:])
+			else:
+				a = np.random.choice(env.action_space.n)
 			#print(s, a)
 			#Get new state and reward from environment
-			s1,r,d,_ = env.step(a)
+			s1,r,d,_ = env.step(a, batch[s])
 			#Update Q-Table with new knowledge
 			Q[s,a] = Q[s,a] + lr*r
 			rAll += r
@@ -92,4 +83,19 @@ def batch_load(env, batch, values, num_episodes):
 		#env.render()
 		#jList.append(j)
 		rList.append(rAll)
-	return Q, rList'''
+	return Q, rList
+
+# Train the agent on a new batch of values, print the final results
+def batch_load(env, batch, values, num_episodes):
+	lr = .9
+	y = .95
+	Q, rList = delayed_reward_agent(env, values, lr, y, num_episodes)
+	#Q, rList = greedy_agent(env, values, lr, y, num_episodes)
+	#print(Q)
+
+	# Determine best actions for the batch
+	batch_actions = np.argmax(Q, axis=1)
+	#print(batch_actions[0:5])
+
+	# Perform the recommended actions
+	env.time_step(batch, values, batch_actions[0:5])
