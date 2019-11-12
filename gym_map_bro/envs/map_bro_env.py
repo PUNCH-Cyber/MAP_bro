@@ -7,6 +7,19 @@ import pandas
 from gym import error, spaces, utils
 from gym.utils import seeding
 
+class datastore(object):
+	def __init__(self, size = 10, frac = 1, values = pd.DataFrame([0],columns=['value_label0']),
+				 df = pd.DataFrame([0],columns=['label0'])):
+
+		self.size = size		# Number of lines that can be stored in this datastore
+		self.frac = frac		# How the value of data is weighted in this datastore
+		self.values = values	# The various value features for each line of data
+		self.df = df			# The actual data stored in this datastore
+
+	def update(self, values, df):
+		self.values = values
+		self.df = df
+
 class broEnv(gym.Env):
 	metadata = {'render.modes': ['human']}
 	
@@ -31,11 +44,35 @@ class broEnv(gym.Env):
 		self.step_num = 0
 		self.observation_space = spaces.Discrete(N_batch)
 		pass
-	
-	def __myinit__(self,	N_database = 10,		# Size of the database
-							columns = "dns.col",	# File with column labels
-							N_batch = 5,			# Number of new lines to try to add to the database
-							init_s = np.array([])):	# Initial database values (needs database initialization)
+
+	def __myinit__(self, env_config =
+	{
+		"action_space": spaces.Discrete(3),
+		"col" : "dns.col",
+		"N_batch": 5,								# Number of new lines to try to add to the datastores each epoch
+		"batch_stocahsitic": False,					# Whether or not the number of lines in each batch is constant (False) or not (True)
+		"size_ds": [10],							# Number of lines in each datastore
+		"val_frac": [0.5]							# Value coefficient associated with each storage option
+	} ):	# Initial database values (needs database initialization)
+
+		# Actions #
+		# 0 = Save
+		# 1 = Compress
+		# 2 = Delete
+		self.action_space = env_config.get("action_space", spaces.Discrete(3))
+		# Observations #
+		self.observation_space = env_config.get("observation_space",spaces.Discrete(self.N+1))
+		# Size of the data storage options
+		self.num_ds = env_config.get("size_ds",[10])
+
+		self.col = pd.read_csv(env_config.get("col","dns.col"))
+
+		self.num_ds = len()
+		self.ds = {}
+		self.names = name
+		for i in self.num_ds:
+			add_datastore(name, size, frac, values, df)
+
 		# Actions #
 		# 0 = Save
 		# 1 = Compress
@@ -109,6 +146,9 @@ class broEnv(gym.Env):
 		self.values0 = np.copy(self.values0_init)
 		self.values1 = np.copy(self.values1_init)
 		return self.step_num
+
+	def add_datastore(self, name, size, frac, values, df):
+		self.ds[name] = datastore(size, frac, values, df)
 	
 	# An action is defined by:
 	# Save: take the value of a single bro line and try to replace the lowest (decayed) value from the value table
