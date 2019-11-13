@@ -6,30 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from gym import error, spaces, utils
 from gym.utils import seeding
-
-def linear_val_func(vals,weights,decay):
-	val_tot = vals.values[:,1:] * weights[1:]					# make use of broadcasting, avoid using age column.
-	decay = np.power(decay, vals.values[:,0]).reshape([-1,1]) 	# decays vals according to age and decay factor of
-																# DataStore, and reshape array to prep for next step.
-	val_tot = np.sum(val_tot * decay, axis = 1)					# Sum all values in row for val_tot per row
-	return val_tot
-
-class DataStore(object):
-	def __init__(self, size = 10, frac = 1, val_weights = [1,1,1], val_func = linear_val_func, decay = 0.9,
-				 vals = pd.DataFrame([0],columns=['value_label0']), df = pd.DataFrame([0],columns=['label0'])):
-
-		self.size = size				# Number of lines that can be stored
-		self.frac = frac				# How the value of data is weighted in this datastore
-		self.vals = vals			# The various value features for each line of data
-		self.init_vals = vals		# The initial values of the data
-		self.val_weights = val_weights	# The weights associated with each value column
-		self.val_func = val_func		# Function for determining total value from various value columns
-		self.decay = decay				# Value decay coefficient for
-		self.df = df					# The actual data stored
-
-	def update(self, vals, df):
-		self.vals = vals
-		self.df = df
+from gym_map_bro.src.datastore import *
 
 class broEnv(gym.Env):
 	metadata = {'render.modes': ['human']}
@@ -62,6 +39,7 @@ class broEnv(gym.Env):
 		"N_batch": 5,										# Number of new lines to try to add to the datastores each epoch
 		"batch_stocahsitic": False,							# Whether or not the number of lines in each batch is constant (False) or not (True)
 		"name": ['deletion','database','compressed','deep'],			# Names to identify different storage formats
+		"link": [[],[],[],[]],
 		"ds_size": [10, 20, 40],							# Number of lines in each datastore
 		"ds_frac": [1, 0.5, 0.25],							# Value coefficient associated with each storage option
 		"val_weight": [1,1,1],								# Weights applied to each value column
@@ -130,46 +108,27 @@ class broEnv(gym.Env):
 	# An action is defined by:
 	# Save: take the value of a single bro line and try to replace the lowest (decayed) value from the value table
 	# Delete: do nothing to the value table, lose value of deleted line as negative reward
-	def _take_action(self, action, value):
+	def _take_action(self, action, val):
 		reward = 0
 		if action == 0:
-			reward = -value
+			reward = -val
 		else:	# Save to df0 with full reward
 			# Find the lowest value of the value table
 			# axis=0 minimizes over columns, [1] is the column of values
 			current_ds = self.ds[self.names[action]] # Grab DataStore associated with action
-			current_vals = self.val_func(current_ds.vals,current_ds.val_weights,current_ds.decay)
+			current_vals = current_ds.vals_tot#self.val_func(current_ds.vals,current_ds.val_weights,current_ds.decay)
 			val_arg = np.argmin(current_vals, axis=0)
 			old_val = current_vals[val_arg]
 
 			# Reward is the new value minus the old value
 			# New value replaces old value
-			reward = value - old_val
-			current_ds.vals[val_arg] = value  #STOPPED HERE ***** Unclear whats 1d, 2d, DF. need to look into this line more.
+			val_tot = current_ds.frac * current_ds.val_func(val,current_ds.val_weights,current_ds.decay)
+			reward = val_tot - old_val
+			current_ds.vals_tot[val_arg] = val_tot
+			current_ds.vals.iloc[val_arg] = val
 
 			# Need to somehow incorporate replacements
 
-		if(action == 0):	# Save to df0 with full reward
-			# Find the lowest value of the value table
-			# axis=0 minimizes over columns, [1] is the column of values
-			val_arg = np.argmin(self.values0, axis=0)[1]
-			old_val = self.values0[val_arg][1]
-
-			# Reward is the new value minus the old value
-			# New value replaces old value
-			reward = value - old_val
-			self.values0[val_arg][1] = value
-		if(action == 1):	# Save to df1 with discounted reward
-			# Find the lowest value of the value table
-			# axis=0 minimizes over columns, [1] is the column of values
-			val_arg = np.argmin(self.values1, axis=0)[1]
-			old_val = self.values1[val_arg][1]
-
-			# Reward is the new value minus the old value
-			# New value replaces old value
-			discount_value = self.compress_frac*value
-			reward = discount_value - old_val
-			self.values1[val_arg][1] = discount_value
 		if(action == 2):	# Save to df0 with full reward
 			# Find lowest value entry in each table
 			val_arg0 = np.argmin(self.values0, axis=0)[1]
@@ -181,8 +140,6 @@ class broEnv(gym.Env):
 			reward = value + self.compress_frac*old_val0 - old_val1
 			self.values1[val_arg1][1] = self.compress_frac*self.values0[val_arg0][1]
 			self.values0[val_arg0][1] = value
-		elif(action == 3):	# Delete with negative value reward
-			reward = -value
 		
 		return reward
 	
