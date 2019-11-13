@@ -7,18 +7,28 @@ import pandas as pd
 from gym import error, spaces, utils
 from gym.utils import seeding
 
+def linear_val_func(vals,weights,decay):
+	val_tot = vals.values[:,1:] * weights[1:]					# make use of broadcasting, avoid using age column.
+	decay = np.power(decay, vals.values[:,0]).reshape([-1,1]) 	# decays vals according to age and decay factor of
+																# DataStore, and reshape array to prep for next step.
+	val_tot = np.sum(val_tot * decay, axis = 1)					# Sum all values in row for val_tot per row
+	return val_tot
+
 class DataStore(object):
-	def __init__(self, size = 10, frac = 1, values = pd.DataFrame([0],columns=['value_label0']),
-				 df = pd.DataFrame([0],columns=['label0'])):
+	def __init__(self, size = 10, frac = 1, val_weights = [1,1,1], val_func = linear_val_func, decay = 0.9,
+				 vals = pd.DataFrame([0],columns=['value_label0']), df = pd.DataFrame([0],columns=['label0'])):
 
-		self.size = size			# Number of lines that can be stored in this datastore
-		self.frac = frac			# How the value of data is weighted in this datastore
-		self.values = values		# The various value features for each line of data
-		self.init_values = values	# The initial values of the data
-		self.df = df				# The actual data stored in this datastore
+		self.size = size				# Number of lines that can be stored
+		self.frac = frac				# How the value of data is weighted in this datastore
+		self.vals = vals			# The various value features for each line of data
+		self.init_vals = vals		# The initial values of the data
+		self.val_weights = val_weights	# The weights associated with each value column
+		self.val_func = val_func		# Function for determining total value from various value columns
+		self.decay = decay				# Value decay coefficient for
+		self.df = df					# The actual data stored
 
-	def update(self, values, df):
-		self.values = values
+	def update(self, vals, df):
+		self.vals = vals
 		self.df = df
 
 class broEnv(gym.Env):
@@ -51,12 +61,13 @@ class broEnv(gym.Env):
 		"col" : "dns.col",
 		"N_batch": 5,										# Number of new lines to try to add to the datastores each epoch
 		"batch_stocahsitic": False,							# Whether or not the number of lines in each batch is constant (False) or not (True)
-		"name": ['database','compressed','deep'],			# Names to identify different storage formats
+		"name": ['deletion','database','compressed','deep'],			# Names to identify different storage formats
 		"ds_size": [10, 20, 40],							# Number of lines in each datastore
 		"ds_frac": [1, 0.5, 0.25],							# Value coefficient associated with each storage option
 		"val_weight": [1,1,1],								# Weights applied to each value column
+		"val_func": linear_val_func,						# function for determining total value from various value columns
 		"ds_decay": [0.9, 0.95, 0.99],						# Rate at which Value decays in each DataStore
-		"values": [pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
+		"vals": [pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
 				   pd.DataFrame(np.zeros((20,3)),columns=['Age','Key Terrain','Queries']),
 				   pd.DataFrame(np.zeros((40,3)),columns=['Age','Key Terrain','Queries'])],
 		"df": [pd.DataFrame(index = np.arange(10),columns=['label0']),		# Dataframes that hold actual datastore contents
@@ -83,17 +94,19 @@ class broEnv(gym.Env):
 		self.ds_size = env_config.get("ds_size",[10, 20, 40])
 		self.ds_frac = env_config.get("ds_frac",[1, 0.5, 0.25])
 		self.val_weight = env_config.get("val_weight",[1,1,1])
+		self.val_func = env_config.get("val_func", linear_val_func)
 		self.ds_decay = env_config.get("ds_decay",[0.9, 0.95, 0.99])
-		self.values = env_config.get('values',[pd.DataFrame(np.zeros((10,2)),columns=['Age','Key Terrain','Queries']),
-											   pd.DataFrame(np.zeros((20,2)),columns=['Age','Key Terrain','Queries']),
-											   pd.DataFrame(np.zeros((40,2)),columns=['Age','Key Terrain','Queries'])])
+		self.vals = env_config.get('vals',[pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),
+											   pd.DataFrame(np.zeros((20,3)),columns=['Age','Key Terrain','Queries']),
+											   pd.DataFrame(np.zeros((40,3)),columns=['Age','Key Terrain','Queries'])])
 		self.df = env_config.get('df', [pd.DataFrame(index = np.arange(10),columns=self.col),
 										pd.DataFrame(index = np.arange(20),columns=self.col),
 										pd.DataFrame(index = np.arange(40),columns=self.col)])
 		self.ds = {}
-		self.names = env_config.get("name",['database','compressed','deep'])
+		self.names = env_config.get("name",['deletion','database','compressed','deep'])
 		for i in np.arange(self.num_ds):
-			add_DataStore(name[i], self.ds_size[i], self.ds_frac[i], self.ds_decay[i],self.values[i], self.df[i])
+			add_DataStore(name[i+1], self.ds_size[i], self.ds_frac[i], self.val_weight, self.val_func, # i+1 to skip deletion name
+						  self.ds_decay[i],self.vals[i], self.df[i])
 
 		# Steps/Observations #
 		# A single step is trying to save/delete/etc. a single line from the batch
@@ -104,8 +117,8 @@ class broEnv(gym.Env):
 		pass
 
 
-	def add_DataStore(self, name, size, frac, values, df):
-		self.ds[name] = DataStore(size, frac, values, df)
+	def add_DataStore(self, name, size, frac, vals, df):
+		self.ds[name] = DataStore(size, frac, vals, df)
 
 	# Batch reset. Used to start trying to save a new batch of lines
 	def batch_reset(self):
@@ -124,13 +137,15 @@ class broEnv(gym.Env):
 		else:	# Save to df0 with full reward
 			# Find the lowest value of the value table
 			# axis=0 minimizes over columns, [1] is the column of values
-			val_arg = np.argmin(self.values[action], axis=0)[1]
-			old_val = self.values0[val_arg][1]
+			current_ds = self.ds[self.names[action]] # Grab DataStore associated with action
+			current_vals = self.val_func(current_ds.vals,current_ds.val_weights,current_ds.decay)
+			val_arg = np.argmin(current_vals, axis=0)
+			old_val = current_vals[val_arg]
 
 			# Reward is the new value minus the old value
 			# New value replaces old value
 			reward = value - old_val
-			self.values0[val_arg][1] = value
+			current_ds.vals[val_arg] = value  #STOPPED HERE ***** Unclear whats 1d, 2d, DF. need to look into this line more.
 
 			# Need to somehow incorporate replacements
 
