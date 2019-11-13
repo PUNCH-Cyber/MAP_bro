@@ -3,11 +3,11 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas
+import pandas as pd
 from gym import error, spaces, utils
 from gym.utils import seeding
 
-class datastore(object):
+class DataStore(object):
 	def __init__(self, size = 10, frac = 1, values = pd.DataFrame([0],columns=['value_label0']),
 				 df = pd.DataFrame([0],columns=['label0'])):
 
@@ -34,9 +34,9 @@ class broEnv(gym.Env):
 		self.N_batch = N_batch
 		self.index0 = np.arange(N_database)
 		self.index1 = np.arange(2*N_database)
-		self.col = pandas.read_csv("dns.col")
-		self.df0 = pandas.DataFrame(index=self.index0, columns=self.col.columns)
-		self.df1 = pandas.DataFrame(index=self.index1, columns=self.col.columns)
+		self.col = pd.read_csv("dns.col")
+		self.df0 = pd.DataFrame(index=self.index0, columns=self.col.columns)
+		self.df1 = pd.DataFrame(index=self.index1, columns=self.col.columns)
 		self.values0 = np.zeros((N_database,2))
 		self.values0_init = np.zeros((2*N_database,2))
 		self.values1 = np.zeros((N_database,2))
@@ -47,57 +47,60 @@ class broEnv(gym.Env):
 
 	def __myinit__(self, env_config =
 	{
-		"action_space": spaces.Discrete(3),
 		"col" : "dns.col",
-		"N_batch": 5,								# Number of new lines to try to add to the datastores each epoch
-		"batch_stocahsitic": False,					# Whether or not the number of lines in each batch is constant (False) or not (True)
-		"size_ds": [10],							# Number of lines in each datastore
-		"val_frac": [0.5]							# Value coefficient associated with each storage option
+		"N_batch": 5,										# Number of new lines to try to add to the datastores each epoch
+		"batch_stocahsitic": False,							# Whether or not the number of lines in each batch is constant (False) or not (True)
+		"name": ['database','compressed','deep'],			# Names to identify different storage formats
+		"size_ds": [10, 20, 40],							# Number of lines in each datastore
+		"val_frac": [1, 0.5, 0.25],							# Value coefficient associated with each storage option
+		"ds_decay": [0.9, 0.95, 0.99],						# Rate at which Value decays in each DataStore
+		"values": [pd.DataFrame([0],columns=['label0'])],	# Values associated with each line of data
+		"df": [pd.DataFrame([0],columns=['label0']),		# Dataframes that hold actual datastore contents
+			   pd.DataFrame([0],columns=['label0']),
+			   pd.DataFrame([0],columns=['label0'])]
 	} ):	# Initial database values (needs database initialization)
 
 		# Actions #
-		# 0 = Save
-		# 1 = Compress
-		# 2 = Delete
-		self.action_space = env_config.get("action_space", spaces.Discrete(3))
+		# 0 = Delete
+		# 1 = Save to 1st DataStore
+		# 2 = Save to 2nd DataStore
+		# N = Save to Nth DataStore
+
+		# Define size variables
+		self.N_batch = env_config.get("N_batch", 5)
+		self.num_ds = len(self.size_ds)
+
+		self.action_space = env_config.get("action_space", spaces.Discrete(self.num_ds))
 		# Observations #
-		self.observation_space = env_config.get("observation_space",spaces.Discrete(self.N+1))
+		self.observation_space = env_config.get("observation_space",spaces.Discrete(self.N_batch))
 		# Size of the data storage options
-		self.num_ds = env_config.get("size_ds",[10])
+		self.size_ds = env_config.get("size_ds",[10, 20, 40])
 
 		self.col = pd.read_csv(env_config.get("col","dns.col"))
+		self.ds_decay = env_config.get("size_ds",[0.9, 0.95, 0.99])
 
-		self.num_ds = len()
 		self.ds = {}
 		self.names = name
-		for i in self.num_ds:
-			add_datastore(name, size, frac, values, df)
+		for i in np.arange(self.num_ds):
+			add_DataStore(name[i], size[i], frac[i], values[i], df[i])
 
 		# Actions #
 		# 0 = Save
 		# 1 = Compress
 		# 2 = Move + Compress
 		# 3 = Delete
-		self.action_space = spaces.Discrete(3)
 
-		# Compression value fraction
-		self.compress_frac = 0.5
-		
-		# Define size variables
-		self.N_database = N_database
-		self.N_batch = N_batch
-		
 		# Define the (blank) database
 		# N_database blank rows
 		self.index0 = np.arange(N_database)
 		self.index1 = np.arange(2*N_database)
 		# Read the column names from dns.col
-		col = pandas.read_csv("dns.col")
+		col = pd.read_csv("dns.col")
 		self.col = col
 		# Define the blank DataFrames
 		# df0 is for "saving" while df1 is for "compressing"
-		self.df0 = pandas.DataFrame(index=self.index0, columns=col.columns)
-		self.df1 = pandas.DataFrame(index=self.index1, columns=col.columns)
+		self.df0 = pd.DataFrame(index=self.index0, columns=col.columns)
+		self.df1 = pd.DataFrame(index=self.index1, columns=col.columns)
 		
 		# Define value table for the database
 		# 0: Time since row was added
@@ -109,46 +112,19 @@ class broEnv(gym.Env):
 			# Make copy of initial value table before playing the game
 			self.values0_init = np.zeros((N_database,2))
 			self.values1_init = np.zeros((2*N_database,2))
-		else:
-			self.values0 = init_s[0]
-			self.values1 = init_s[1]
-			
-			self.values0_init = init_s[0]
-			self.values1_init = init_s[1]
+
 
 		# Steps/Observations #
 		# A single step is trying to save/delete/etc. a single line from the batch
 		self.step_num = 0
-		self.observation_space = spaces.Discrete(N_batch)
 
-		self.deleted = pandas.DataFrame(index=[], columns=col.columns)
+		self.deleted = pd.DataFrame(index=[], columns=col.columns)
 		self.del_val = []
 		pass
-		
-	# Full reset. Reset steps, database, and values
-	def reset(self):
-		self.step_num = 0
 
-		self.df0 = pandas.DataFrame(index=self.index0, columns=self.col.columns)
-		self.df1 = pandas.DataFrame(index=self.index1, columns=self.col.columns)
 
-		self.values0 = np.zeros((self.N_database,2))
-		self.values1 = np.zeros((self.N_database,2))
-
-		self.values0_init = np.zeros((self.N_database,2))
-		self.values1_init = np.zeros((self.N_database,2))
-
-		return self.step_num
-	
-	# Batch reset. Used to start trying to save a new batch of lines
-	def batch_reset(self):
-		self.step_num = 0
-		self.values0 = np.copy(self.values0_init)
-		self.values1 = np.copy(self.values1_init)
-		return self.step_num
-
-	def add_datastore(self, name, size, frac, values, df):
-		self.ds[name] = datastore(size, frac, values, df)
+	def add_DataStore(self, name, size, frac, values, df):
+		self.ds[name] = DataStore(size, frac, values, df)
 	
 	# An action is defined by:
 	# Save: take the value of a single bro line and try to replace the lowest (decayed) value from the value table
@@ -228,7 +204,7 @@ class broEnv(gym.Env):
 				self.values0_init[rep_row, 1] = values[i]
 
 				# Replace the database row
-				#dns_batch = pandas.read_csv("dns.log")
+				#dns_batch = pd.read_csv("dns.log")
 				dns_line = batch.values[i]
 				self.df0.loc[rep_row] = dns_line
 			if(actions[i] == 1):
@@ -243,7 +219,7 @@ class broEnv(gym.Env):
 				self.values1_init[rep_row, 1] = self.compress_frac*values[i]
 
 				# Replace the database row
-				#dns_batch = pandas.read_csv("dns.log")
+				#dns_batch = pd.read_csv("dns.log")
 				dns_line = batch.values[i]
 				self.df1.loc[rep_row] = dns_line
 			if(actions[i] == 2):
@@ -266,7 +242,7 @@ class broEnv(gym.Env):
 				self.df1.loc[rep_row1] = self.df0.loc[rep_row0]
 
 				# Replace the database row
-				#dns_batch = pandas.read_csv("dns.log")
+				#dns_batch = pd.read_csv("dns.log")
 				dns_line = batch.values[i]
 				self.df0.loc[rep_row0] = dns_line
 			#else:
