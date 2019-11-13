@@ -46,18 +46,19 @@ class broEnv(gym.Env):
 		self.observation_space = spaces.Discrete(N_batch)
 		pass
 
-	def __myinit__(self, env_config =
+	def __myinit__(self, env_config = #Eventually switch this with just None
 	{
 		"col" : "dns.col",
 		"N_batch": 5,										# Number of new lines to try to add to the datastores each epoch
 		"batch_stocahsitic": False,							# Whether or not the number of lines in each batch is constant (False) or not (True)
 		"name": ['database','compressed','deep'],			# Names to identify different storage formats
-		"size_ds": [10, 20, 40],							# Number of lines in each datastore
-		"val_frac": [1, 0.5, 0.25],							# Value coefficient associated with each storage option
+		"ds_size": [10, 20, 40],							# Number of lines in each datastore
+		"ds_frac": [1, 0.5, 0.25],							# Value coefficient associated with each storage option
+		"val_weight": [1,1,1],								# Weights applied to each value column
 		"ds_decay": [0.9, 0.95, 0.99],						# Rate at which Value decays in each DataStore
-		"values": [pd.DataFrame(np.zeros((10,2)),columns=['Age','label0']),		# Values associated with each line of data
-				   pd.DataFrame(np.zeros((20,2)),columns=['Age','label0']),
-				   pd.DataFrame(np.zeros((40,2)),columns=['Age','label0'])],
+		"values": [pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
+				   pd.DataFrame(np.zeros((20,3)),columns=['Age','Key Terrain','Queries']),
+				   pd.DataFrame(np.zeros((40,3)),columns=['Age','Key Terrain','Queries'])],
 		"df": [pd.DataFrame(index = np.arange(10),columns=['label0']),		# Dataframes that hold actual datastore contents
 			   pd.DataFrame(index = np.arange(20),columns=['label0']),
 			   pd.DataFrame(index = np.arange(40),columns=['label0'])]
@@ -69,28 +70,30 @@ class broEnv(gym.Env):
 		# 2 = Save to 2nd DataStore
 		# N = Save to Nth DataStore
 
+		# Most of this doesn't need to be carried around in self. ok for now.
 		self.col = pd.read_csv(env_config.get("col","dns.col"))
 		# Define size variables
 		self.N_batch = env_config.get("N_batch", 5)
-		self.num_ds = len(self.size_ds)
+		self.num_ds = len(self.ds_size)
 
 		self.action_space = env_config.get("action_space", spaces.Discrete(self.num_ds))
 		# Observations #
 		self.observation_space = env_config.get("observation_space",spaces.Discrete(self.N_batch))
 		# Size of the data storage options
-		self.size_ds = env_config.get("size_ds",[10, 20, 40])
-		self.val_frac = env_config.get("val_frac",[1, 0.5, 0.25])
-		self.ds_decay = env_config.get("size_ds",[0.9, 0.95, 0.99])
-		self.values = env_config.get('values',[pd.DataFrame(np.zeros((10,2)),columns=['Age','label0']),
-											   pd.DataFrame(np.zeros((20,2)),columns=['Age','label0']),
-											   pd.DataFrame(np.zeros((40,2)),columns=['Age','label0'])])
+		self.ds_size = env_config.get("ds_size",[10, 20, 40])
+		self.ds_frac = env_config.get("ds_frac",[1, 0.5, 0.25])
+		self.val_weight = env_config.get("val_weight",[1,1,1])
+		self.ds_decay = env_config.get("ds_decay",[0.9, 0.95, 0.99])
+		self.values = env_config.get('values',[pd.DataFrame(np.zeros((10,2)),columns=['Age','Key Terrain','Queries']),
+											   pd.DataFrame(np.zeros((20,2)),columns=['Age','Key Terrain','Queries']),
+											   pd.DataFrame(np.zeros((40,2)),columns=['Age','Key Terrain','Queries'])])
 		self.df = env_config.get('df', [pd.DataFrame(index = np.arange(10),columns=self.col),
 										pd.DataFrame(index = np.arange(20),columns=self.col),
 										pd.DataFrame(index = np.arange(40),columns=self.col)])
 		self.ds = {}
-		self.names = name
+		self.names = env_config.get("name",['database','compressed','deep'])
 		for i in np.arange(self.num_ds):
-			add_DataStore(name[i], size[i], frac[i], values[i], df[i])
+			add_DataStore(name[i], self.ds_size[i], self.ds_frac[i], self.ds_decay[i],self.values[i], self.df[i])
 
 		# Steps/Observations #
 		# A single step is trying to save/delete/etc. a single line from the batch
@@ -103,6 +106,13 @@ class broEnv(gym.Env):
 
 	def add_DataStore(self, name, size, frac, values, df):
 		self.ds[name] = DataStore(size, frac, values, df)
+
+	# Batch reset. Used to start trying to save a new batch of lines
+	def batch_reset(self):
+		self.step_num = 0
+		for i in np.arange(self.num_ds):
+			self.values0 = np.copy(self.values0_init) #Is this necessary given DataStore.update?
+		return self.step_num
 	
 	# An action is defined by:
 	# Save: take the value of a single bro line and try to replace the lowest (decayed) value from the value table
@@ -114,13 +124,15 @@ class broEnv(gym.Env):
 		else:	# Save to df0 with full reward
 			# Find the lowest value of the value table
 			# axis=0 minimizes over columns, [1] is the column of values
-			val_arg = np.argmin(self.values0, axis=0)[1]
+			val_arg = np.argmin(self.values[action], axis=0)[1]
 			old_val = self.values0[val_arg][1]
 
 			# Reward is the new value minus the old value
 			# New value replaces old value
 			reward = value - old_val
 			self.values0[val_arg][1] = value
+
+			# Need to somehow incorporate replacements
 
 		if(action == 0):	# Save to df0 with full reward
 			# Find the lowest value of the value table

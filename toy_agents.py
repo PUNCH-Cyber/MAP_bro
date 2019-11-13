@@ -14,7 +14,7 @@ def recommend(files, Q):
             r = np.argmax(row)
             print("File {}: {} recommendation: {}". format(i, files[i], action[r]))
 
-def delayed_reward_agent(env, batch, lr, y, num_episodes):
+def delayed_reward_agent(env, batch_values, lr, y, num_episodes):
 	Q = np.zeros([env.observation_space.n+1,env.action_space.n])
 	# Set learning parameters
 	#create lists to contain total rewards and steps per episode
@@ -37,7 +37,7 @@ def delayed_reward_agent(env, batch, lr, y, num_episodes):
 				a = np.random.choice(env.action_space.n)
 			#print(s, a)
 			#Get new state and reward from environment
-			s1,r,d,_ = env.step(a, batch[s])
+			s1,r,d,_ = env.step(a, batch_values[s])
 			#Update Q-Table with new knowledge
 			Q[s,a] = Q[s,a] + lr*(r + y*np.max(Q[s1,:]) - Q[s,a])
 			rAll += r
@@ -49,7 +49,7 @@ def delayed_reward_agent(env, batch, lr, y, num_episodes):
 		rList.append(rAll)
 	return Q, rList
 
-def greedy_agent(env, batch, lr, y, num_episodes):
+def greedy_agent(env, batch_values, lr, y, num_episodes):
 	Q = np.zeros([env.observation_space.n,env.action_space.n])
 	# Set learning parameters
 	#create lists to contain total rewards and steps per episode
@@ -73,7 +73,7 @@ def greedy_agent(env, batch, lr, y, num_episodes):
 				a = np.random.choice(env.action_space.n)
 			#print(s, a)
 			#Get new state and reward from environment
-			s1,r,d,_ = env.step(a, batch[s])
+			s1,r,d,_ = env.step(a, batch_values[s])
 			#Update Q-Table with new knowledge
 			Q[s,a] = Q[s,a] + lr*r
 			rAll += r
