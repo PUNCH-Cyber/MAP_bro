@@ -11,10 +11,11 @@ class DataStore(object):
 	def __init__(self, size = 10, frac = 1, values = pd.DataFrame([0],columns=['value_label0']),
 				 df = pd.DataFrame([0],columns=['label0'])):
 
-		self.size = size		# Number of lines that can be stored in this datastore
-		self.frac = frac		# How the value of data is weighted in this datastore
-		self.values = values	# The various value features for each line of data
-		self.df = df			# The actual data stored in this datastore
+		self.size = size			# Number of lines that can be stored in this datastore
+		self.frac = frac			# How the value of data is weighted in this datastore
+		self.values = values		# The various value features for each line of data
+		self.init_values = values	# The initial values of the data
+		self.df = df				# The actual data stored in this datastore
 
 	def update(self, values, df):
 		self.values = values
@@ -54,10 +55,12 @@ class broEnv(gym.Env):
 		"size_ds": [10, 20, 40],							# Number of lines in each datastore
 		"val_frac": [1, 0.5, 0.25],							# Value coefficient associated with each storage option
 		"ds_decay": [0.9, 0.95, 0.99],						# Rate at which Value decays in each DataStore
-		"values": [pd.DataFrame([0],columns=['label0'])],	# Values associated with each line of data
-		"df": [pd.DataFrame([0],columns=['label0']),		# Dataframes that hold actual datastore contents
-			   pd.DataFrame([0],columns=['label0']),
-			   pd.DataFrame([0],columns=['label0'])]
+		"values": [pd.DataFrame(np.zeros((10,2)),columns=['Age','label0']),		# Values associated with each line of data
+				   pd.DataFrame(np.zeros((20,2)),columns=['Age','label0']),
+				   pd.DataFrame(np.zeros((40,2)),columns=['Age','label0'])],
+		"df": [pd.DataFrame(index = np.arange(10),columns=['label0']),		# Dataframes that hold actual datastore contents
+			   pd.DataFrame(index = np.arange(20),columns=['label0']),
+			   pd.DataFrame(index = np.arange(40),columns=['label0'])]
 	} ):	# Initial database values (needs database initialization)
 
 		# Actions #
@@ -66,6 +69,7 @@ class broEnv(gym.Env):
 		# 2 = Save to 2nd DataStore
 		# N = Save to Nth DataStore
 
+		self.col = pd.read_csv(env_config.get("col","dns.col"))
 		# Define size variables
 		self.N_batch = env_config.get("N_batch", 5)
 		self.num_ds = len(self.size_ds)
@@ -75,44 +79,18 @@ class broEnv(gym.Env):
 		self.observation_space = env_config.get("observation_space",spaces.Discrete(self.N_batch))
 		# Size of the data storage options
 		self.size_ds = env_config.get("size_ds",[10, 20, 40])
-
-		self.col = pd.read_csv(env_config.get("col","dns.col"))
+		self.val_frac = env_config.get("val_frac",[1, 0.5, 0.25])
 		self.ds_decay = env_config.get("size_ds",[0.9, 0.95, 0.99])
-
+		self.values = env_config.get('values',[pd.DataFrame(np.zeros((10,2)),columns=['Age','label0']),
+											   pd.DataFrame(np.zeros((20,2)),columns=['Age','label0']),
+											   pd.DataFrame(np.zeros((40,2)),columns=['Age','label0'])])
+		self.df = env_config.get('df', [pd.DataFrame(index = np.arange(10),columns=self.col),
+										pd.DataFrame(index = np.arange(20),columns=self.col),
+										pd.DataFrame(index = np.arange(40),columns=self.col)])
 		self.ds = {}
 		self.names = name
 		for i in np.arange(self.num_ds):
 			add_DataStore(name[i], size[i], frac[i], values[i], df[i])
-
-		# Actions #
-		# 0 = Save
-		# 1 = Compress
-		# 2 = Move + Compress
-		# 3 = Delete
-
-		# Define the (blank) database
-		# N_database blank rows
-		self.index0 = np.arange(N_database)
-		self.index1 = np.arange(2*N_database)
-		# Read the column names from dns.col
-		col = pd.read_csv("dns.col")
-		self.col = col
-		# Define the blank DataFrames
-		# df0 is for "saving" while df1 is for "compressing"
-		self.df0 = pd.DataFrame(index=self.index0, columns=col.columns)
-		self.df1 = pd.DataFrame(index=self.index1, columns=col.columns)
-		
-		# Define value table for the database
-		# 0: Time since row was added
-		# 1: Positive reward for adding the row to the table
-		if len(init_s) == 0:
-			self.values0 = np.zeros((N_database,2))
-			self.values1 = np.zeros((2*N_database,2))
-
-			# Make copy of initial value table before playing the game
-			self.values0_init = np.zeros((N_database,2))
-			self.values1_init = np.zeros((2*N_database,2))
-
 
 		# Steps/Observations #
 		# A single step is trying to save/delete/etc. a single line from the batch
@@ -131,6 +109,19 @@ class broEnv(gym.Env):
 	# Delete: do nothing to the value table, lose value of deleted line as negative reward
 	def _take_action(self, action, value):
 		reward = 0
+		if action == 0:
+			reward = -value
+		else:	# Save to df0 with full reward
+			# Find the lowest value of the value table
+			# axis=0 minimizes over columns, [1] is the column of values
+			val_arg = np.argmin(self.values0, axis=0)[1]
+			old_val = self.values0[val_arg][1]
+
+			# Reward is the new value minus the old value
+			# New value replaces old value
+			reward = value - old_val
+			self.values0[val_arg][1] = value
+
 		if(action == 0):	# Save to df0 with full reward
 			# Find the lowest value of the value table
 			# axis=0 minimizes over columns, [1] is the column of values
