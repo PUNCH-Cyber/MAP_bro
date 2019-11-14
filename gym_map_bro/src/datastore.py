@@ -33,17 +33,38 @@ class DataStore(object):
         self.vals = vals
         self.df = df
 
-class Druid_DB(DataStore):
+    def save(self, val, val_tot, val_arg):
+        self.vals_tot[val_arg] = val_tot
+        self.vals.iloc[val_arg] = val
+        return
+
+    def retrieve(self):
+        return
+
+    def delete(self):
+        return
+
+class HotStore(DataStore): #E.g. Druid
     def __init__(self):
         super().__init__(size = 10, frac = 1, val_weights = [1,1,1], val_func = linear_val_func, decay = 0.9,
                          vals = pd.DataFrame([0],columns=['value_label0']), df = pd.DataFrame([0],columns=['label0']))
 
-class Parquet_HDD(DataStore):
+class WarmStore(DataStore): #E.g. Parquet on HDD
     def __init__(self):
         super().__init__(size = 10, frac = 1, val_weights = [1,1,1], val_func = linear_val_func, decay = 0.9,
                          vals = pd.DataFrame([0],columns=['value_label0']), df = pd.DataFrame([0],columns=['label0']))
 
-class Glacier(DataStore):
+class ColdStore(DataStore): #E.g. Glacier on AWS
     def __init__(self):
         super().__init__(size = 10, frac = 1, val_weights = [1,1,1], val_func = linear_val_func, decay = 0.9,
                          vals = pd.DataFrame([0],columns=['value_label0']), df = pd.DataFrame([0],columns=['label0']))
+
+class Architecture(object): #Object used to specify total environment
+    def __init__(self):
+
+class LambdaArch(Architecture): #2 Hot + 1 Warm + 1 Cold
+    def __init__(self):
+
+class KappaArch(Architecture): #1 Hot + 1 Warm + 1 Cold
+    def __init__(self):
+

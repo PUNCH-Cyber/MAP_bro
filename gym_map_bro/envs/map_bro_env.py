@@ -83,7 +83,7 @@ class broEnv(gym.Env):
 		self.ds = {}
 		self.names = env_config.get("name",['deletion','database','compressed','deep'])
 		for i in np.arange(self.num_ds):
-			add_DataStore(name[i+1], self.ds_size[i], self.ds_frac[i], self.val_weight, self.val_func, # i+1 to skip deletion name
+			addDataStore(name[i+1], self.ds_size[i], self.ds_frac[i], self.val_weight, self.val_func, # i+1 to skip deletion name
 						  self.ds_decay[i],self.vals[i], self.df[i])
 
 		# Steps/Observations #
@@ -95,8 +95,9 @@ class broEnv(gym.Env):
 		pass
 
 
-	def add_DataStore(self, name, size, frac, vals, df):
+	def addDataStore(self, name, size, frac, vals, df):
 		self.ds[name] = DataStore(size, frac, vals, df)
+
 
 	# Batch reset. Used to start trying to save a new batch of lines
 	def batch_reset(self):
@@ -124,8 +125,8 @@ class broEnv(gym.Env):
 			# New value replaces old value
 			val_tot = current_ds.frac * current_ds.val_func(val,current_ds.val_weights,current_ds.decay)
 			reward = val_tot - old_val
-			current_ds.vals_tot[val_arg] = val_tot
-			current_ds.vals.iloc[val_arg] = val
+			current_ds.save(val,val_tot,val_arg)
+
 
 			# Need to somehow incorporate replacements
 
