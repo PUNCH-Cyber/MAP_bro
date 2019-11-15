@@ -48,6 +48,10 @@ class broEnv(gym.Env):
 		"vals": [pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
 				   pd.DataFrame(np.zeros((20,3)),columns=['Age','Key Terrain','Queries']),
 				   pd.DataFrame(np.zeros((40,3)),columns=['Age','Key Terrain','Queries'])],
+		"init_policy": [np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1))),
+						np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1))),
+						np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1)))], #Initially start with a hot to cold policy for data
+		"init_expir": [np.ones((10,3))*20,np.ones((20,3))*20,np.ones((40,3))*20], #Data 20 time steps old must be re-evaluated
 		"df": [pd.DataFrame(index = np.arange(10),columns=['label0']),		# Dataframes that hold actual datastore contents
 			   pd.DataFrame(index = np.arange(20),columns=['label0']),
 			   pd.DataFrame(index = np.arange(40),columns=['label0'])]
@@ -80,11 +84,13 @@ class broEnv(gym.Env):
 		self.df = env_config.get('df', [pd.DataFrame(index = np.arange(10),columns=self.col),
 										pd.DataFrame(index = np.arange(20),columns=self.col),
 										pd.DataFrame(index = np.arange(40),columns=self.col)])
+		self.init_policy = env_config.get("init_policy",[np.mgrid[0:10, 1:4][1],np.mgrid[0:20, 1:4][1],np.mgrid[0:40, 1:4][1]])
+		self.init_expir = env_config.get("init_expir",[np.ones(10)*20,np.ones(20)*20,np.ones(40)*20])
 		self.ds = {}
 		self.names = env_config.get("name",['deletion','database','compressed','deep'])
 		for i in np.arange(self.num_ds):
-			addDataStore(name[i+1], self.ds_size[i], self.ds_frac[i], self.val_weight, self.val_func, # i+1 to skip deletion name
-						  self.ds_decay[i],self.vals[i], self.df[i])
+			addDataStore(name[i+1], i, self.ds_size[i], self.ds_frac[i], self.val_weight, self.val_func, # i+1 to skip deletion name
+						  self.ds_decay[i], self.vals[i], self.init_policy[i], self.init_expir[i], self.df[i])
 
 		# Steps/Observations #
 		# A single step is trying to save/delete/etc. a single line from the batch
@@ -95,8 +101,8 @@ class broEnv(gym.Env):
 		pass
 
 
-	def addDataStore(self, name, size, frac, vals, df):
-		self.ds[name] = DataStore(size, frac, vals, df)
+	def addDataStore(self, name, id_num, size, frac, vals, policy, expir df):
+		self.ds[name] = DataStore(id_num, size, frac, vals, policy, expir, df)
 
 
 	# Batch reset. Used to start trying to save a new batch of lines
@@ -113,35 +119,16 @@ class broEnv(gym.Env):
 		reward = 0
 		if action == 0:
 			reward = -val
-		else:	# Save to df0 with full reward
-			# Find the lowest value of the value table
-			# axis=0 minimizes over columns, [1] is the column of values
+		else:
 			current_ds = self.ds[self.names[action]] # Grab DataStore associated with action
-			current_vals = current_ds.vals_tot#self.val_func(current_ds.vals,current_ds.val_weights,current_ds.decay)
-			val_arg = np.argmin(current_vals, axis=0)
-			old_val = current_vals[val_arg]
+			val_arg = np.argmin(current_ds.vals_tot, axis=0)
+			low_val = current_ds.vals_tot[val_arg]
 
-			# Reward is the new value minus the old value
-			# New value replaces old value
-			val_tot = current_ds.frac * current_ds.val_func(val,current_ds.val_weights,current_ds.decay)
-			reward = val_tot - old_val
-			current_ds.save(val,val_tot,val_arg)
+			if low_val != 0: # If current_ds is full. this might not be 100% fool-proof though
+				current_ds.evaluate(val, -1)
+			else:
+				reward = current_ds.save(val)
 
-
-			# Need to somehow incorporate replacements
-
-		if(action == 2):	# Save to df0 with full reward
-			# Find lowest value entry in each table
-			val_arg0 = np.argmin(self.values0, axis=0)[1]
-			old_val0 = self.values0[val_arg0][1]
-			val_arg1 = np.argmin(self.values1, axis=0)[1]
-			old_val1 = self.values1[val_arg1][1]
-
-			# Reward is new value plus compressed value minus lost value
-			reward = value + self.compress_frac*old_val0 - old_val1
-			self.values1[val_arg1][1] = self.compress_frac*self.values0[val_arg0][1]
-			self.values0[val_arg0][1] = value
-		
 		return reward
 	
 	# The step is doing the desired action and generating the RL variables
