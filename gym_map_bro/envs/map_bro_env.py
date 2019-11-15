@@ -43,7 +43,7 @@ class broEnv(gym.Env):
 		"ds_size": [10, 20, 40],							# Number of lines in each datastore
 		"ds_frac": [1, 0.5, 0.25],							# Value coefficient associated with each storage option
 		"val_weight": [1,1,1],								# Weights applied to each value column
-		"val_func": linear_val_func,						# function for determining total value from various value columns
+		"val_func": lambda val: linear_val_func(val,np.array[1,1,1],decay=1),# function for determining total value from various value columns
 		"ds_decay": [0.9, 0.95, 0.99],						# Rate at which Value decays in each DataStore
 		"vals": [pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
 				   pd.DataFrame(np.zeros((20,3)),columns=['Age','Key Terrain','Queries']),
@@ -76,7 +76,7 @@ class broEnv(gym.Env):
 		self.ds_size = env_config.get("ds_size",[10, 20, 40])
 		self.ds_frac = env_config.get("ds_frac",[1, 0.5, 0.25])
 		self.val_weight = env_config.get("val_weight",[1,1,1])
-		self.val_func = env_config.get("val_func", linear_val_func)
+		self.val_func = env_config.get("val_func", lambda val: linear_val_func(val,np.array[1,1,1],decay=1)) # Note this is different from DataStore implementation
 		self.ds_decay = env_config.get("ds_decay",[0.9, 0.95, 0.99])
 		self.vals = env_config.get('vals',[pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),
 											   pd.DataFrame(np.zeros((20,3)),columns=['Age','Key Terrain','Queries']),
@@ -115,17 +115,19 @@ class broEnv(gym.Env):
 	# An action is defined by:
 	# Save: take the value of a single bro line and try to replace the lowest (decayed) value from the value table
 	# Delete: do nothing to the value table, lose value of deleted line as negative reward
-	def _take_action(self, action, val):
+	def _take_action(self, action, val): # I think this is just evaluate with a val_arg of -1 case
 		reward = 0
 		if action == 0:
-			reward = -val
+			reward = -self.val_func(val) #env val_func only takes val
 		else:
 			current_ds = self.ds[self.names[action]] # Grab DataStore associated with action
 			val_arg = np.argmin(current_ds.vals_tot, axis=0)
-			low_val = current_ds.vals_tot[val_arg]
+			low_val_tot = current_ds.vals_tot[val_arg]
+			low_val = current_ds.vals[val_arg]
 
 			if low_val != 0: # If current_ds is full. this might not be 100% fool-proof though
-				current_ds.evaluate(val, -1)
+				unweighted_low_val = low_val/current_ds.frac #Need to remove old frac
+				reward = current_ds.evaluate(unweighted_low_val, val_arg,self.ds,self.names)
 			else:
 				reward = current_ds.save(val)
 

@@ -33,20 +33,34 @@ class DataStore(object):
         self.expir = expir              # Expiration times associated with data policy
         self.df = df					# The actual data stored
 
-    def evaluate(self, val,val_arg):
+    def evaluate(self, val,val_arg, all_ds,names):
         if val_arg = -1: # data is not in DataStore already, so putting new data into DataStore
             curr_policy_arg = np.argwhere(self.policy == self.id_num)
-            next_ds_id = self.policy[curr_policy_arg+1] # Find the next DataStore in this data's policy
+            next_ds_id = self.policy[val_arg][curr_policy_arg+1] # Find the next DataStore in this data's policy
             if next_ds_id == 0: #Next step is deletion
+                reward = -self.val_func(val,self.val_weights,self.decay)
+            else: #Next step is another DataStore
+                next_ds = all_ds[names[next_ds_id]] # Grab DataStore associated with action
+                next_val_arg = np.argmin(next_ds.vals_tot, axis=0)
+                low_val_tot = next_ds.vals_tot[next_val_arg]
+                low_val = next_ds.vals[next_val_arg]
 
-            else:
-                next_ds = self.ds[self.names[next_ds_id]] # Grab DataStore associated with action
-                val_arg = np.argmin(next_ds.vals_tot, axis=0)
-                low_val = next_ds.vals_tot[val_arg]
+                if low_val != 0: # If next_ds is full. this might not be 100% fool-proof though
+                    unweighted_low_val = low_val/next_ds.frac #Need to remove old frac
+                    reward = next_ds.evaluate(unweighted_low_val, next_val_arg,all_ds,names)
+                else:
+                    reward = next_ds.save(val)
 
-        if low_val != 0:
+            # Reward is the new value plus the cascade of rewards caused by transferring the old value
+            # New value replaces old value
+            val_tot = self.frac * self.val_func(val,self.val_weights,self.decay) #Be careful with this frac. only want it applied once
+            reward = val_tot + reward
+            self.vals_tot[val_arg] = val_tot
+            self.vals.iloc[val_arg] = val
+        return reward
+        else: # data is already in DataStore so data must be slated to expire or is getting kicked out by higher value data
 
-            val_arg = np.argmin(self.vals_tot, axis=0)
+        #Make sure to remove old frac
             old_val = self.vals_tot[val_arg]
 
             # Reward is the new value minus the old value
@@ -54,16 +68,7 @@ class DataStore(object):
             val_tot = self.frac * self.val_func(val,self.val_weights,self.decay)
             reward = val_tot - old_val
             self.vals_tot[val_arg] = val_tot
-            self.vals.iloc[val_arg] = val
-        else: # data is already in DataStore so data must be slated to expire
-            old_val = self.vals_tot[val_arg]
-
-            # Reward is the new value minus the old value
-            # New value replaces old value
-            val_tot = self.frac * self.val_func(val,self.val_weights,self.decay)
-            reward = val_tot - old_val
-            self.vals_tot[val_arg] = val_tot
-            self.vals.iloc[val_arg] = val
+            self.vals.iloc[val_arg] = self.frac*val # !STOPPED HERE 11/15
 
 
     def save(self, val):
