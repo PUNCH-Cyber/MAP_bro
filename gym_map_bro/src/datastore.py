@@ -14,6 +14,12 @@ def linear_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.ar
     val_tot = np.sum(val_tot * decay, axis = 1)					# Sum all values in row for val_tot per row
     return val_tot
 
+def squared_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.array([1,1,1]),decay = 0.9):
+    pass
+
+def max_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.array([1,1,1]),decay = 0.9):
+    pass
+
 class DataStore(object):
     def __init__(self, id_num = 1, size = 10, frac = 1, val_weights = np.array([1,1,1]), val_func = linear_val_func, decay = 0.9,
                  vals = pd.DataFrame([np.zeros(10)],columns=['value_label0']), policy = np.mgrid[0:10, 1:4][1],
@@ -34,11 +40,13 @@ class DataStore(object):
         self.df = df					# The actual data stored
 
     def evaluate(self, val,val_arg, all_ds,names):
-        if val_arg = -1: # data is not in DataStore already, so putting new data into DataStore
+
+        if val_arg = -1: # Let's make -1 the sign that the data is decaying?
             curr_policy_arg = np.argwhere(self.policy == self.id_num)
             next_ds_id = self.policy[val_arg][curr_policy_arg+1] # Find the next DataStore in this data's policy
+            val_tot = self.val_func(val,self.val_weights,self.decay)
             if next_ds_id == 0: #Next step is deletion
-                reward = -self.val_func(val,self.val_weights,self.decay)
+                reward = -val_tot
             else: #Next step is another DataStore
                 next_ds = all_ds[names[next_ds_id]] # Grab DataStore associated with action
                 next_val_arg = np.argmin(next_ds.vals_tot, axis=0)
@@ -47,40 +55,50 @@ class DataStore(object):
 
                 if low_val != 0: # If next_ds is full. this might not be 100% fool-proof though
                     unweighted_low_val = low_val/next_ds.frac #Need to remove old frac
-                    reward = next_ds.evaluate(unweighted_low_val, next_val_arg,all_ds,names)
+                    reward = self.frac*val_tot + next_ds.evaluate(unweighted_low_val, next_val_arg,all_ds,names)
                 else:
-                    reward = next_ds.save(val)
+                    reward = self.frac*val_tot + next_ds.save(val)
 
             # Reward is the new value plus the cascade of rewards caused by transferring the old value
             # New value replaces old value
-            val_tot = self.frac * self.val_func(val,self.val_weights,self.decay) #Be careful with this frac. only want it applied once
-            reward = val_tot + reward
             self.vals_tot[val_arg] = val_tot
             self.vals.iloc[val_arg] = val
-        return reward
-        else: # data is already in DataStore so data must be slated to expire or is getting kicked out by higher value data
 
-        #Make sure to remove old frac
-            old_val = self.vals_tot[val_arg]
+        else: # Current DataStore is full! (currently same as decay version, but ultimately they will be different)
+            curr_policy_arg = np.argwhere(self.policy == self.id_num)
+            next_ds_id = self.policy[val_arg][curr_policy_arg+1] # Find the next DataStore in this data's policy
+            val_tot = self.val_func(val,self.val_weights,self.decay)
+            if next_ds_id == 0: #Next step is deletion
+                reward = -val_tot
+            else: #Next step is another DataStore
+                next_ds = all_ds[names[next_ds_id]] # Grab DataStore associated with action
+                next_val_arg = np.argmin(next_ds.vals_tot, axis=0)
+                low_val_tot = next_ds.vals_tot[next_val_arg]
+                low_val = next_ds.vals[next_val_arg]
 
-            # Reward is the new value minus the old value
+                if low_val != 0: # If next_ds is full. this might not be 100% fool-proof though
+                    unweighted_low_val = low_val/next_ds.frac #Need to remove old frac
+                    reward = self.frac*val_tot + next_ds.evaluate(unweighted_low_val, next_val_arg,all_ds,names)
+                else:
+                    reward = self.frac*val_tot + next_ds.save(low_val)
+
+            # Reward is the new value plus the cascade of rewards caused by transferring the old value
             # New value replaces old value
-            val_tot = self.frac * self.val_func(val,self.val_weights,self.decay)
-            reward = val_tot - old_val
             self.vals_tot[val_arg] = val_tot
-            self.vals.iloc[val_arg] = self.frac*val # !STOPPED HERE 11/15
+            self.vals.iloc[val_arg] = val
+
+        return reward
 
 
-    def save(self, val):
+    def save(self, val): #Probably a better way to incorporate this behavior. Could do a lambda function of evaluate and just pass a special flag, like -2.
         val_arg = np.argmin(self.vals_tot, axis=0)
-        old_val = self.vals_tot[val_arg]
-        if old_val == 0: self.full = 1
+        old_val_tot = self.vals_tot[val_arg]
         # Reward is the new value minus the old value
         # New value replaces old value
         val_tot = self.frac * self.val_func(val,self.val_weights,self.decay)
-        reward = val_tot - old_val
+        reward = val_tot - old_val_tot
         self.vals_tot[val_arg] = val_tot
-        self.vals.iloc[val_arg] = val
+        self.vals.iloc[val_arg] = self.frac*val
 
         return reward
 
@@ -92,41 +110,30 @@ class DataStore(object):
 
 class HotStore(DataStore): #E.g. Druid
     def __init__(self):
-        super().__init__(size = 10, frac = 1, val_weights = [1,1,1], val_func = linear_val_func, decay = 0.9,
+        super().__init__(size = 10, frac = 1, val_weights = np.array([1,1,1]), val_func = linear_val_func, decay = 0.9,
                          vals = pd.DataFrame([0],columns=['value_label0']), df = pd.DataFrame([0],columns=['label0']))
 
 class WarmStore(DataStore): #E.g. Parquet on HDD
     def __init__(self):
-        super().__init__(size = 10, frac = 1, val_weights = [1,1,1], val_func = linear_val_func, decay = 0.9,
+        super().__init__(size = 10, frac = 1, val_weights = np.array([1,1,1]), val_func = linear_val_func, decay = 0.9,
                          vals = pd.DataFrame([0],columns=['value_label0']), df = pd.DataFrame([0],columns=['label0']))
 
 class ColdStore(DataStore): #E.g. Glacier on AWS
     def __init__(self):
-        super().__init__(size = 10, frac = 1, val_weights = [1,1,1], val_func = linear_val_func, decay = 0.9,
+        super().__init__(size = 10, frac = 1, val_weights = np.array([1,1,1]), val_func = linear_val_func, decay = 0.9,
                          vals = pd.DataFrame([0],columns=['value_label0']), df = pd.DataFrame([0],columns=['label0']))
 
 class Architecture(object): #Object used to specify total environment
     def __init__(self):
+        pass
 
 class LambdaArch(Architecture): #2 Hot + 1 Warm + 1 Cold
     def __init__(self):
+        super().__init__()
+        pass
 
 class KappaArch(Architecture): #1 Hot + 1 Warm + 1 Cold
     def __init__(self):
-
-def DataStore_transfer(ds0, ds1,val,ds1_num):
-
-    if ds1 is full:
-        dest_ds = self.ds[self.names[action+1]]
-        DataStore_transfer(ds1,ds2)
-    # Find lowest value entry in each table
-    val_arg0 = np.argmin(self.values0, axis=0)[1]
-    old_val0 = self.values0[val_arg0][1]
-    val_arg1 = np.argmin(self.values1, axis=0)[1]
-    old_val1 = self.values1[val_arg1][1]
-
-    # Reward is new value plus compressed value minus lost value
-    reward = value + self.compress_frac*old_val0 - old_val1
-    self.values1[val_arg1][1] = self.compress_frac*self.values0[val_arg0][1]
-    self.values0[val_arg0][1] = value
+        super().__init__()
+        pass
 

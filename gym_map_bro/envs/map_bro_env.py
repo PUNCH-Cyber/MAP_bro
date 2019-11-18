@@ -48,9 +48,9 @@ class broEnv(gym.Env):
 		"vals": [pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
 				   pd.DataFrame(np.zeros((20,3)),columns=['Age','Key Terrain','Queries']),
 				   pd.DataFrame(np.zeros((40,3)),columns=['Age','Key Terrain','Queries'])],
-		"init_policy": [np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1))),
+		"init_policy": [np.hstack((np.mgrid[0:10, 1:4][1],np.zeros(10).reshape(-1,1))),
 						np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1))),
-						np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1)))], #Initially start with a hot to cold policy for data
+						np.hstack((np.mgrid[0:40, 1:4][1],np.zeros(40).reshape(-1,1)))], #Initially start with a hot to cold policy for data
 		"init_expir": [np.ones((10,3))*20,np.ones((20,3))*20,np.ones((40,3))*20], #Data 20 time steps old must be re-evaluated
 		"df": [pd.DataFrame(index = np.arange(10),columns=['label0']),		# Dataframes that hold actual datastore contents
 			   pd.DataFrame(index = np.arange(20),columns=['label0']),
@@ -115,8 +115,7 @@ class broEnv(gym.Env):
 	# An action is defined by:
 	# Save: take the value of a single bro line and try to replace the lowest (decayed) value from the value table
 	# Delete: do nothing to the value table, lose value of deleted line as negative reward
-	def _take_action(self, action, val): # I think this is just evaluate with a val_arg of -1 case
-		reward = 0
+	def _take_action(self, action, val): # Might be able to make this a special case of evaluate
 		if action == 0:
 			reward = -self.val_func(val) #env val_func only takes val
 		else:
@@ -142,7 +141,7 @@ class broEnv(gym.Env):
 		done = self.step_num == self.N_batch
 		return obs, reward, done, {}
 	
-	# Decay function for valeus
+	# Decay function for values
 	# The value table will contain the current
 	def decay_step(self, val, rate):
 		val = val*rate
