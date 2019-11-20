@@ -152,11 +152,21 @@ class broEnv(gym.Env):
 	# 1. Loop through recommendations and apply to database
 	# 2. Time labels are increased by 1 and the values are decayed
 	# 3. Values are applied to initial for next batch
-	def time_step(self, batch, values, actions):
+	def reach_retention(self):
+		for i in np.arange(self.num_ds)[::-1]+1: #Go from cold to hot DataStores
+			current_ds = self.ds[self.names[i]] # Grab DataStore associated with action
+		data, val, policy = current_ds.get_expir()
+		for j in np.arange(data.shape[0]):
+			rep_row = np.argmin(self.values0_init, axis=0)[1]
+
+	def time_step(self, batch, values, actions, advance = 0):
 		#self.batch_reset()
-		
-		for i in range(0,self.N_batch):
+
+		for i in range(0,batch.shape[0]):
 			if(actions[i] == 0):
+
+			else:
+				current_ds = self.ds[self.names[actions[i]]] # Grab DataStore associated with action
 				# Find the row we want to replace
 				rep_row = np.argmin(self.values0_init, axis=0)[1]
 				
@@ -215,8 +225,9 @@ class broEnv(gym.Env):
 		self.decay_step(self.values0_init[:,1], 0.9)
 		self.decay_step(self.values1_init[:,1], 0.95)
 
-		self.values0_init[:,0] += 1
-		self.values1_init[:,0] += 1
+		if advance == 1:
+			self.values0_init[:,0] += 1
+			self.values1_init[:,0] += 1
 		
 		#new_values = self.values0
 		#self.values0_init = new_values

@@ -41,7 +41,7 @@ class DataStore(object):
 
     def evaluate(self, val,val_arg, all_ds,names):
 
-        if val_arg = -1: # Let's make -1 the sign that the data is decaying?
+        if val_arg = -1: # Let's make -1 the flag that the data is decaying?
             curr_policy_arg = np.argwhere(self.policy == self.id_num)
             next_ds_id = self.policy[val_arg][curr_policy_arg+1] # Find the next DataStore in this data's policy
             val_tot = self.val_func(val,self.val_weights,self.decay)
@@ -61,6 +61,7 @@ class DataStore(object):
 
             # Reward is the new value plus the cascade of rewards caused by transferring the old value
             # New value replaces old value
+            # Wait should this be happening in the evaluate step? BIG QUESTION!!!!!
             self.vals_tot[val_arg] = val_tot
             self.vals.iloc[val_arg] = val
 
@@ -102,11 +103,11 @@ class DataStore(object):
 
         return reward
 
-    def retrieve(self):
-        return
-
-    def delete(self):
-        return
+    def get_expir(self):
+        expired_data = self.vals.loc[self.vals['Age']>self.expir]
+        expired_values = self.vals_tot[self.vals['Age']>self.expir]
+        expired_policy = self.policy.loc[self.vals['Age']>self.expir]
+        return expired_data, expired_values, expired_policy
 
 class HotStore(DataStore): #E.g. Druid
     def __init__(self):

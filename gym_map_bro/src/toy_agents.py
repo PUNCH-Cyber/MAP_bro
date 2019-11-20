@@ -87,8 +87,16 @@ def greedy_agent(env, batch_values, lr, y, num_episodes):
 
 # Train the agent on a new batch of values, print the final results
 def batch_load(env, batch, values, num_episodes):
+	#Need to check if any of the data has expired
 	lr = .9
 	y = .95
+	for i in np.arange(env.num_ds)[::-1]+1: #Go from cold to hot DataStores
+		expir_data, expir_values = env.check_expir(i)
+		Q, rList = delayed_reward_agent(env, values, lr, y, num_episodes)
+		batch_actions = np.argmax(Q, axis=1)
+		env.time_step(expir_data, expir_values, batch_actions[0:5],0)
+
+	#Training on incoming data
 	Q, rList = delayed_reward_agent(env, values, lr, y, num_episodes)
 	#Q, rList = greedy_agent(env, values, lr, y, num_episodes)
 	#print(Q)
@@ -98,4 +106,4 @@ def batch_load(env, batch, values, num_episodes):
 	#print(batch_actions[0:5])
 
 	# Perform the recommended actions
-	env.time_step(batch, values, batch_actions[0:5])
+	env.time_step(batch, values, batch_actions[0:5],1)
