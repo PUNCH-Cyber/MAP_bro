@@ -7,6 +7,7 @@ import pandas as pd
 from gym import error, spaces, utils
 from gym.utils import seeding
 from gym_map_bro.src.datastore import *
+from gym_map_bro.src.data import *
 
 class broEnv(gym.Env):
 	metadata = {'render.modes': ['human']}
@@ -45,12 +46,12 @@ class broEnv(gym.Env):
 		"val_weight": [1,1,1],								# Weights applied to each value column
 		"val_func": lambda val: linear_val_func(val,np.array[1,1,1],decay=1),# function for determining total value from various value columns
 		"ds_decay": [0.9, 0.95, 0.99],						# Rate at which Value decays in each DataStore
-		"vals": [pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
-				   pd.DataFrame(np.zeros((20,3)),columns=['Age','Key Terrain','Queries']),
+		"vals": [pd.DataFrame(index = np.arange(10),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
+				   pd.DataFrame(index = np.arange(20),columns=['Age','Key Terrain','Queries']),
 				   pd.DataFrame(np.zeros((40,3)),columns=['Age','Key Terrain','Queries'])],
-		"init_policy": [np.hstack((np.mgrid[0:10, 1:4][1],np.zeros(10).reshape(-1,1))),
+		"init_rplan": [np.hstack((np.mgrid[0:10, 1:4][1],np.zeros(10).reshape(-1,1))),
 						np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1))),
-						np.hstack((np.mgrid[0:40, 1:4][1],np.zeros(40).reshape(-1,1)))], #Initially start with a hot to cold policy for data
+						np.hstack((np.mgrid[0:40, 1:4][1],np.zeros(40).reshape(-1,1)))], #Initially start with a hot to cold retention plan for data
 		"init_expir": [np.ones((10,3))*20,np.ones((20,3))*20,np.ones((40,3))*20], #Data 20 time steps old must be re-evaluated
 		"df": [pd.DataFrame(index = np.arange(10),columns=['label0']),		# Dataframes that hold actual datastore contents
 			   pd.DataFrame(index = np.arange(20),columns=['label0']),
@@ -69,7 +70,8 @@ class broEnv(gym.Env):
 		self.N_batch = env_config.get("N_batch", 5)
 		self.num_ds = len(self.ds_size)
 
-		self.action_space = env_config.get("action_space", spaces.Discrete(self.num_ds))
+		self.action_space = env_config.get("action_space", spaces.Discrete(self.num_ds)) 	#Actions are now proceed with current retention plan or
+																				# move to next step in retention plan
 		# Observations #
 		self.observation_space = env_config.get("observation_space",spaces.Discrete(self.N_batch))
 		# Size of the data storage options
@@ -84,7 +86,7 @@ class broEnv(gym.Env):
 		self.df = env_config.get('df', [pd.DataFrame(index = np.arange(10),columns=self.col),
 										pd.DataFrame(index = np.arange(20),columns=self.col),
 										pd.DataFrame(index = np.arange(40),columns=self.col)])
-		self.init_policy = env_config.get("init_policy",[np.mgrid[0:10, 1:4][1],np.mgrid[0:20, 1:4][1],np.mgrid[0:40, 1:4][1]])
+		self.init_rplan = env_config.get("init_rplan",[np.mgrid[0:10, 1:4][1],np.mgrid[0:20, 1:4][1],np.mgrid[0:40, 1:4][1]])
 		self.init_expir = env_config.get("init_expir",[np.ones(10)*20,np.ones(20)*20,np.ones(40)*20])
 		self.ds = {}
 		self.names = env_config.get("name",['deletion','database','compressed','deep'])
@@ -101,8 +103,8 @@ class broEnv(gym.Env):
 		pass
 
 
-	def addDataStore(self, name, id_num, size, frac, vals, policy, expir df):
-		self.ds[name] = DataStore(id_num, size, frac, vals, policy, expir, df)
+	def addDataStore(self, name, id_num, size, frac, vals, rplan, expir df):
+		self.ds[name] = DataStore(id_num, size, frac, vals, rplan, expir, df)
 
 
 	# Batch reset. Used to start trying to save a new batch of lines
@@ -113,28 +115,32 @@ class broEnv(gym.Env):
 		return self.step_num
 	
 	# An action is defined by:
-	# Save: take the value of a single bro line and try to replace the lowest (decayed) value from the value table
-	# Delete: do nothing to the value table, lose value of deleted line as negative reward
-	def _take_action(self, action, val): # Might be able to make this a special case of evaluate
+	# Use current step in retention plan
+	# Use next step in retention plan
+	def _take_action(self, action, md): # Might be able to make this a special case of evaluate
+
 		if action == 0:
-			reward = -self.val_func(val) #env val_func only takes val
+			reward = -ds.val_func(md.val, ds.val_weights, ds.decay) #env val_func only takes val
 		else:
-			current_ds = self.ds[self.names[action]] # Grab DataStore associated with action
-			val_arg = np.argmin(current_ds.vals_tot, axis=0)
-			low_val_tot = current_ds.vals_tot[val_arg]
-			low_val = current_ds.vals[val_arg]
-
-			if low_val != 0: # If current_ds is full. this might not be 100% fool-proof though
-				unweighted_low_val = low_val/current_ds.frac #Need to remove old frac
-				reward = current_ds.evaluate(unweighted_low_val, val_arg,self.ds,self.names)
+			md_ds_arg = md.rplan[md_ind] #which dataStore is the data currently in
+			ds = self.ds[self.names[action]] # Grab DataStore associated with action
+			if ds.id_num < md_ds_arg:
+				reward = -10 #negative reward associated with choosing a previous dataStore in retention plan
 			else:
-				reward = current_ds.save(val)
+				reward = ds.val_func(md.val, ds.val_weights, ds.decay) #Reward for saving current metaData to dataStore
 
+			val_arg = np.argmin(ds.val_tot, axis=0) #arg of the min value in dataStore
+			low_val_tot = ds.val_tot[val_arg]	#val_tot of low_val
+
+			if not np.isnan(low_val_tot): # If dataStore is full. this might not be 100% fool-proof though
+				low_val = ds.dataBatch[val_arg].val #low_val in dataStore
+				unweighted_low_val = low_val/ds.frac #Need to remove old frac
+				reward +=  ds.evaluate(unweighted_low_val, val_arg,self.ds,self.names) ##!!! Need to tweak evaluate now!!! ####
 		return reward
 	
 	# The step is doing the desired action and generating the RL variables
-	def step(self, action, value):
-		reward = self._take_action(action, value)
+	def step(self, action, dl):
+		reward = self._take_action(action, dl.metaData) ###!!!!###
 		self.step_num += 1
 
 		obs = self.step_num
@@ -155,7 +161,7 @@ class broEnv(gym.Env):
 	def reach_retention(self):
 		for i in np.arange(self.num_ds)[::-1]+1: #Go from cold to hot DataStores
 			current_ds = self.ds[self.names[i]] # Grab DataStore associated with action
-		data, val, policy = current_ds.get_expir()
+		data, val, rplan = current_ds.get_expir()
 		for j in np.arange(data.shape[0]):
 			rep_row = np.argmin(self.values0_init, axis=0)[1]
 

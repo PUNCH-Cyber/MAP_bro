@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from .data import *
 
 
 def linear_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.array([1,1,1]),decay = 0.9): #vals can be dataframe or series
@@ -22,28 +23,29 @@ def max_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.array
 
 class DataStore(object):
     def __init__(self, id_num = 1, size = 10, frac = 1, val_weights = np.array([1,1,1]), val_func = linear_val_func, decay = 0.9,
-                 vals = pd.DataFrame([np.zeros(10)],columns=['value_label0']), policy = np.mgrid[0:10, 1:4][1],
-                 expir = np.ones(10)*20,df = pd.DataFrame([0],columns=['label0'])):
+                 val = pd.DataFrame([np.zeros(10)],columns=['value_label0']), rplan = np.mgrid[0:10, 1:4][1],
+                 ind = np.zeros(10),expir = np.ones(10)*20,data = pd.DataFrame([0],columns=['label0'])):
+
 
         self.id_num = id_num            # Identification number of datastore
         self.size = size				# Number of lines that can be stored
         self.frac = frac				# How the value of data is weighted in this datastore
         self.val_func = val_func		# Function for determining total value from various value columns
-        self.vals = vals				# The various value features for each line of data
-        self.vals_tot = val_func(vals, val_weights, decay)	# Total weighted value for each line of data
-        self.init_vals = vals.copy()						# The initial values of the data
-        self.init_vals_tot = np.copy(self.vals_tot)			# Initial total weighted value
+
+        self.val_tot = val_func(val, val_weights, decay)	# Total weighted value for each line of data
+        self.init_val = val.copy()						# The initial values of the data
+        self.init_val_tot = np.copy(self.val_tot)			# Initial total weighted value
         self.val_weights = val_weights	# The weights associated with each value column
         self.decay = decay				# Value decay coefficient for time decay
-        self.policy = policy            # Policy for where data moves to
-        self.expir = expir              # Expiration times associated with data policy
-        self.df = df					# The actual data stored
+        self.expir = expir              # Expiration times associated with data retention plan
+
+        self.dataBatch = dataBatch(data,val,ind,rplan) #Data and metadata stored in this dataStore
 
     def evaluate(self, val,val_arg, all_ds,names):
 
         if val_arg = -1: # Let's make -1 the flag that the data is decaying?
-            curr_policy_arg = np.argwhere(self.policy == self.id_num)
-            next_ds_id = self.policy[val_arg][curr_policy_arg+1] # Find the next DataStore in this data's policy
+            curr_rplan_arg = np.argwhere(self.rplan == self.id_num)
+            next_ds_id = self.rplan[val_arg][curr_rplan_arg+1] # Find the next DataStore in this data's retention plan
             val_tot = self.val_func(val,self.val_weights,self.decay)
             if next_ds_id == 0: #Next step is deletion
                 reward = -val_tot
@@ -66,8 +68,8 @@ class DataStore(object):
             self.vals.iloc[val_arg] = val
 
         else: # Current DataStore is full! (currently same as decay version, but ultimately they will be different)
-            curr_policy_arg = np.argwhere(self.policy == self.id_num)
-            next_ds_id = self.policy[val_arg][curr_policy_arg+1] # Find the next DataStore in this data's policy
+            curr_rplan_arg = np.argwhere(self.dataBatch.[val_arg].rplan == self.id_num)
+            next_ds_id = self.dataBatch.[val_arg].rplan[curr_rplan_arg+1] # Find the next DataStore in this data's retention plan
             val_tot = self.val_func(val,self.val_weights,self.decay)
             if next_ds_id == 0: #Next step is deletion
                 reward = -val_tot
@@ -106,8 +108,8 @@ class DataStore(object):
     def get_expir(self):
         expired_data = self.vals.loc[self.vals['Age']>self.expir]
         expired_values = self.vals_tot[self.vals['Age']>self.expir]
-        expired_policy = self.policy.loc[self.vals['Age']>self.expir]
-        return expired_data, expired_values, expired_policy
+        expired_rplan = self.rplan.loc[self.vals['Age']>self.expir]
+        return expired_data, expired_values, expired_rplan
 
 class HotStore(DataStore): #E.g. Druid
     def __init__(self):
