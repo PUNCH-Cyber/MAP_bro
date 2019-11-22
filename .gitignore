@@ -15,3 +15,8 @@ gym_map_bro.egg-info/dependency_links.txt
 gym_map_bro/env/.ipynb_checkpoints/map_env-checkpoint.py
 gym_map_bro/envs/.ipynb_checkpoints/map_env-checkpoint.py
 .ipynb_checkpoints/pandas_tests-checkpoint.ipynb
+.idea/codeStyles/codeStyleConfig.xml
+.idea/misc.xml
+.idea/MAP_bro.iml
+.idea/modules.xml
+.idea/vcs.xml
