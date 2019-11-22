@@ -106,4 +106,4 @@ def batch_load(env, db, num_episodes):
 	#print(batch_actions[0:5])
 
 	# Perform the recommended actions
-	env.time_step(db.batch, db.val, batch_actions[0:5],1)
+	env.time_step(db, batch_actions[0:5])

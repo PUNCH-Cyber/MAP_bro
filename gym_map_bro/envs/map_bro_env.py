@@ -39,12 +39,11 @@ class broEnv(gym.Env):
 		"col" : "dns.col",
 		"N_batch": 5,										# Number of new lines to try to add to the datastores each epoch
 		"batch_stocahsitic": False,							# Whether or not the number of lines in each batch is constant (False) or not (True)
-		"name": ['deletion','database','compressed','deep'],			# Names to identify different storage formats
-		"link": [[],[],[],[]],
+		"name": ['deletion','Hot','Warm','Cold'],			# Names to identify different storage formats
 		"ds_size": [10, 20, 40],							# Number of lines in each datastore
 		"ds_frac": [1, 0.5, 0.25],							# Value coefficient associated with each storage option
-		"val_weight": [1,1,1],								# Weights applied to each value column
-		"val_func": lambda val: linear_val_func(val,np.array[1,1,1],decay=1),# function for determining total value from various value columns
+		"val_weight": [[1,1,1][1,1,1],[1,1,1]],								# Weights applied to each value column
+		"val_func": linear_val_func,# function for determining total value from various value columns
 		"ds_decay": [0.9, 0.95, 0.99],						# Rate at which Value decays in each DataStore
 		"vals": [pd.DataFrame(index = np.arange(10),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
 				   pd.DataFrame(index = np.arange(20),columns=['Age','Key Terrain','Queries']),
@@ -52,6 +51,7 @@ class broEnv(gym.Env):
 		"init_rplan": [np.hstack((np.mgrid[0:10, 1:4][1],np.zeros(10).reshape(-1,1))),
 						np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1))),
 						np.hstack((np.mgrid[0:40, 1:4][1],np.zeros(40).reshape(-1,1)))], #Initially start with a hot to cold retention plan for data
+		"ind": [np.zeros((10,3)),np.zeros((20,3)),np.zeros((40,3))], #All data is initialized to the first step of it's rplan
 		"init_expir": [np.ones((10,3))*20,np.ones((20,3))*20,np.ones((40,3))*20], #Data 20 time steps old must be re-evaluated
 		"df": [pd.DataFrame(index = np.arange(10),columns=['label0']),		# Dataframes that hold actual datastore contents
 			   pd.DataFrame(index = np.arange(20),columns=['label0']),
@@ -77,8 +77,8 @@ class broEnv(gym.Env):
 		# Size of the data storage options
 		self.ds_size = env_config.get("ds_size",[10, 20, 40])
 		self.ds_frac = env_config.get("ds_frac",[1, 0.5, 0.25])
-		self.val_weight = env_config.get("val_weight",[1,1,1])
-		self.val_func = env_config.get("val_func", lambda val: linear_val_func(val,np.array[1,1,1],decay=1)) # Note this is different from DataStore implementation
+		self.val_weight = env_config.get("val_weight",[[1,1,1],[1,1,1],[1,1,1]])
+		self.val_func = env_config.get("val_func", linear_val_func) # Note this is different from DataStore implementation
 		self.ds_decay = env_config.get("ds_decay",[0.9, 0.95, 0.99])
 		self.vals = env_config.get('vals',[pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),
 											   pd.DataFrame(np.zeros((20,3)),columns=['Age','Key Terrain','Queries']),
@@ -87,31 +87,35 @@ class broEnv(gym.Env):
 										pd.DataFrame(index = np.arange(20),columns=self.col),
 										pd.DataFrame(index = np.arange(40),columns=self.col)])
 		self.init_rplan = env_config.get("init_rplan",[np.mgrid[0:10, 1:4][1],np.mgrid[0:20, 1:4][1],np.mgrid[0:40, 1:4][1]])
+		self.ind = env_config.get("ind", [np.zeros((10,3)),np.zeros((20,3)),np.zeros((40,3))])
 		self.init_expir = env_config.get("init_expir",[np.ones(10)*20,np.ones(20)*20,np.ones(40)*20])
 		self.ds = {}
-		self.names = env_config.get("name",['deletion','database','compressed','deep'])
+		self.names = env_config.get("name",['deletion','Hot','Warm','Cold'])
 		for i in np.arange(self.num_ds):
-			addDataStore(name[i+1], i, self.ds_size[i], self.ds_frac[i], self.val_weight, self.val_func, # i+1 to skip deletion name
-						  self.ds_decay[i], self.vals[i], self.init_policy[i], self.init_expir[i], self.df[i])
+			self.addDataStore(self.names[i+1], i, self.ds_size[i], self.ds_frac[i], self.val_weight[i], self.val_func, # i+1 to skip deletion name
+						  self.ds_decay[i], self.vals[i], self.init_rplan[i], self.ind[i], self.init_expir[i], self.df[i])
 
 		# Steps/Observations #
 		# A single step is trying to save/delete/etc. a single line from the batch
 		self.step_num = 0
 
-		self.deleted = pd.DataFrame(index=[], columns=col.columns)
+		self.deleted = pd.DataFrame(index=[], columns=self.col)
 		self.del_val = []
 		pass
 
 
-	def addDataStore(self, name, id_num, size, frac, vals, rplan, expir df):
-		self.ds[name] = DataStore(id_num, size, frac, vals, rplan, expir, df)
+	def addDataStore(self, name, id_num, size, frac, val_weights,val_func, decay, val, rplan, ind, expir, data):
+		self.ds[name] = DataStore(id_num, size, frac, val_weights,val_func, decay, val, rplan, ind, expir, data)
+
 
 
 	# Batch reset. Used to start trying to save a new batch of lines
 	def batch_reset(self):
 		self.step_num = 0
 		for i in np.arange(self.num_ds):
-			self.values0 = np.copy(self.values0_init) #Is this necessary given DataStore.update?
+			ds = self.ds[self.names[i]]
+			for j in np.arange():
+				ds.DataBatch.batch[j].metaData.val = np.copy(ds.DataBatch.batch[j].val) #Refresh metaData of all DataStores
 		return self.step_num
 	
 	# An action is defined by:
@@ -119,23 +123,27 @@ class broEnv(gym.Env):
 	# Use next step in retention plan
 	def _take_action(self, action, md): # Might be able to make this a special case of evaluate
 
-		if action == 0:
-			reward = -ds.val_func(md.val, ds.val_weights, ds.decay) #env val_func only takes val
+		if action == 0: #Delete this data
+			reward = -self.val_func(md.val, self.val_weight, self.ds_decay) #env val_func only takes val
 		else:
-			md_ds_arg = md.rplan[md_ind] #which dataStore is the data currently in
+			md_ds_arg = md.rplan[md.ind] #which dataStore is the data currently in
 			ds = self.ds[self.names[action]] # Grab DataStore associated with action
 			if ds.id_num < md_ds_arg:
 				reward = -10 #negative reward associated with choosing a previous dataStore in retention plan
 			else:
-				reward = ds.val_func(md.val, ds.val_weights, ds.decay) #Reward for saving current metaData to dataStore
+				reward = ds.frac*ds.val_func(md.val) #Reward for saving current metaData to dataStore
 
-			val_arg = np.argmin(ds.val_tot, axis=0) #arg of the min value in dataStore
-			low_val_tot = ds.val_tot[val_arg]	#val_tot of low_val
+			val_arg = np.argmin(ds.dataBatch.get('val_tot',1), axis=0) #arg of the min value in dataStore
+			low_val_tot = ds.dataBatch[val_arg].metaData.val_tot	#val_tot of low_val
 
 			if not np.isnan(low_val_tot): # If dataStore is full. this might not be 100% fool-proof though
-				low_val = ds.dataBatch[val_arg].val #low_val in dataStore
+				low_val = ds.dataBatch.batch[val_arg].metaData.val #low_val in dataStore
 				unweighted_low_val = low_val/ds.frac #Need to remove old frac
-				reward +=  ds.evaluate(unweighted_low_val, val_arg,self.ds,self.names) ##!!! Need to tweak evaluate now!!! ####
+				reward +=  ds.evaluate(unweighted_low_val, val_arg,self.ds,self.names)
+
+			ds.dataBatch.batch[val_arg].metaData.val = md.val
+			ds.dataBatch.batch[val_arg].metaData.val_tot = md.val_tot
+			ds.dataBatch.batch[val_arg].metaData.ind = np.argwhere(ds.dataBatch.batch[val_arg].metaData.rplan == action)
 		return reward
 	
 	# The step is doing the desired action and generating the RL variables
@@ -153,101 +161,66 @@ class broEnv(gym.Env):
 		val = val*rate
 	def inv_decay(self, val, n, rate):
 		return val*rate**(-n)
+
+
 	
 	# The time step is where we complete the actions recommended by the agent.
 	# 1. Loop through recommendations and apply to database
 	# 2. Time labels are increased by 1 and the values are decayed
 	# 3. Values are applied to initial for next batch
-	def reach_retention(self):
+	def retention_fallout(self):
 		for i in np.arange(self.num_ds)[::-1]+1: #Go from cold to hot DataStores
 			current_ds = self.ds[self.names[i]] # Grab DataStore associated with action
-		data, val, rplan = current_ds.get_expir()
-		for j in np.arange(data.shape[0]):
-			rep_row = np.argmin(self.values0_init, axis=0)[1]
-
-	def time_step(self, batch, values, actions, advance = 0):
-		#self.batch_reset()
-
-		for i in range(0,batch.shape[0]):
-			if(actions[i] == 0):
-
-			else:
-				current_ds = self.ds[self.names[actions[i]]] # Grab DataStore associated with action
-				# Find the row we want to replace
+			data, val, rplan = current_ds.get_expir()
+			for j in np.arange(data.shape[0]):
 				rep_row = np.argmin(self.values0_init, axis=0)[1]
-				
-				if(self.values0_init[rep_row, 0] != 0):
-					self.del_val.append(self.values0_init[rep_row])
 
-				# Replace the value row
-				self.values0_init[rep_row, 0] = 0
-				self.values0_init[rep_row, 1] = values[i]
+	def time_step(self, db, actions):
 
-				# Replace the database row
-				#dns_batch = pd.read_csv("dns.log")
-				dns_line = batch.values[i]
-				self.df0.loc[rep_row] = dns_line
-			if(actions[i] == 1):
-				# Find the row we want to replace
-				rep_row = np.argmin(self.values1_init, axis=0)[1]
+		for i in range(0,db.size):
+			di = db.batch[i] #dataItem
+			if actions[i] == 0:
+				self.del_val.append(di.val_tot)
+			else:
+				ds = self.ds[self.names[actions[i]]] # Grab DataStore associated with action
 
-				if(self.values1_init[rep_row, 0] != 0):
-					self.del_val.append(self.values1_init[rep_row])
+				val_arg = np.argmin(ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
+				next_di = ds.dataBatch.batch[val_arg]
+				low_val_tot = next_di.val_tot	#val_tot of low_val
 
-				# Replace the value row
-				self.values1_init[rep_row, 0] = 0
-				self.values1_init[rep_row, 1] = self.compress_frac*values[i]
+				ds.dataBatch.batch[val_arg] = di #Need to make certain that this isn't overwriting next_di
+				ds.dataBatch.batch[val_arg].ind = np.argwhere(di.rplan == actions[i])
 
-				# Replace the database row
-				#dns_batch = pd.read_csv("dns.log")
-				dns_line = batch.values[i]
-				self.df1.loc[rep_row] = dns_line
-			if(actions[i] == 2):
-				# Find the rows in each table we work with
-				rep_row0 = np.argmin(self.values0_init, axis=0)[1]
-				rep_row1 = np.argmin(self.values1_init, axis=0)[1]
+				j = actions[i]+1
+				while not np.isnan(low_val_tot) or j <= self.num_ds: # If dataStore is full. this might not be 100% fool-proof though.
+																	# Keep moving down the line until you reach a dataStore that has space or deletion
+					next_ds = self.ds[self.names[j]]
+					next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
+					low_val_tot = next_ds.dataBatch[next_val_arg].val_tot	#val_tot of low_val
+					next_ds.dataBatch.batch[next_val_arg] = next_di
+					next_ds.dataBatch.batch[next_val_arg].ind = np.argwhere(di.rplan == actions[i])
+					j += 1
+					if j == 4:
+						self.del_val.append(low_val_tot)
 
-				if(self.values1_init[rep_row1, 0] != 0):
-					self.del_val.append(self.values1_init[rep_row1])
-				
-				# Compress the firt sentry
-				self.values1_init[rep_row1, 0] = self.values0_init[rep_row0, 0]
-				self.values1_init[rep_row1, 1] = self.compress_frac*self.values0_init[rep_row0, 1]
+		for i in np.arange(self.num_ds):
+			self.ds[i].dataBatch.age_step()
 
-				# Replace the first entry
-				self.values0_init[rep_row0, 0] = 0
-				self.values0_init[rep_row0, 1] = values[i]
-
-				# Replace the compressed database row
-				self.df1.loc[rep_row1] = self.df0.loc[rep_row0]
-
-				# Replace the database row
-				#dns_batch = pd.read_csv("dns.log")
-				dns_line = batch.values[i]
-				self.df0.loc[rep_row0] = dns_line
-			#else:
-				#dns_line = batch.values[i]
-				#self.deleted.append(dns_line)
-		self.decay_step(self.values0_init[:,1], 0.9)
-		self.decay_step(self.values1_init[:,1], 0.95)
-
-		if advance == 1:
-			self.values0_init[:,0] += 1
-			self.values1_init[:,0] += 1
-		
-		#new_values = self.values0
-		#self.values0_init = new_values
 	
 	def render(self, mode='human', out=0, close=True):
-		time0 = self.values0_init[:,0]
-		value0 = self.inv_decay(self.values0_init[:,1],self.values0_init[:,0], 0.9)
-		time1 = self.values1_init[:,0]
-		value1 = self.inv_decay(self.values1_init[:,1],self.values1_init[:,0], 0.9)
+		time = {}
+		value = {}
+		for i in np.arange(self.num_ds):
+			ds = self.ds[self.names[i+1]]
+			time[self.names[i+1]] = ds.dataBatch.get('val')[:,0]
+			value[self.names[i+1]] = self.inv_decay(ds.dataBatch.get('val_tot'),time[self.names[i+1]],0.9)
 
 		if(out == 0):
 			sub = plt.subplot()
-			sub.scatter(time0, value0, color='b', alpha=1.0, label="Uncompressed")
-			sub.scatter(time1, value1, color='r', alpha=1.0, label="Compressed")
+			clr = ['r','k','b']
+			for i in np.arange(self.num_ds):
+				sub.scatter(time[self.names[i+1]], value[self.names[i+1]], color=clr[i], alpha=1.0, label=self.names[i+1])
+
 			x_val = [x[0] for x in self.del_val]
 			y_val = [x[1] for x in self.del_val]
 			sub.scatter(np.array(x_val),-np.array(y_val),color="g", label="Deleted")
@@ -259,15 +232,11 @@ class broEnv(gym.Env):
 			plt.show()
 			plt.close()
 		elif(out == 1):
-			print_df = self.df0.copy()
-			print_df['age'] = time0
-			print_df['value'] = value0
-			print("Uncompressed Database:")
-			print(print_df[['uid', 'src', 'sport', 'age', 'value']])
+			for i in np.arange(self.num_ds):
+				print_df = ds[i].dataBatch.get('data')
+				#print_df['age'] = time[self.names[i+1]]
+				#print_df['value'] = value[self.names[i+1]]
+				print(f"{self.names[i+1]} Database:")
+				print(print_df[['uid', 'src', 'sport', 'age', 'value']])
 
-			print_df = self.df1.copy()
-			print_df['age'] = time1
-			print_df['value'] = value1
-			print("Compressed Database:")
-			print(print_df[['uid', 'src', 'sport', 'age', 'value']])
 		return 0
