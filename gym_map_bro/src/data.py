@@ -17,9 +17,9 @@ class dataItem(object):
         self.data = data
         self.val = val
         self.val_tot = val_tot
-        self.ind = ind
+        self.ind = int(ind)
         self.rplan = rplan
-        self.metaData = metaData(val,val_tot,ind,rplan)
+        self.metaData = metaData(val,val_tot,int(ind),rplan)
 
 
 class dataBatch(object):

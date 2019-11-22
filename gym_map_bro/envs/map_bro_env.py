@@ -14,24 +14,24 @@ class broEnv(gym.Env):
 	
 	# __init__ is essentially pointless, the program is designed to be run from __myinit__
 	def __init__(self):
-		self.action_space = spaces.Discrete(3)
-		self.compress_frac = 0.5
-		self.observation_space = spaces.Discrete(3)
-		N_database = 1
-		N_batch = 1
-		self.N_database = N_database
-		self.N_batch = N_batch
-		self.index0 = np.arange(N_database)
-		self.index1 = np.arange(2*N_database)
-		self.col = pd.read_csv("dns.col")
-		self.df0 = pd.DataFrame(index=self.index0, columns=self.col.columns)
-		self.df1 = pd.DataFrame(index=self.index1, columns=self.col.columns)
-		self.values0 = np.zeros((N_database,2))
-		self.values0_init = np.zeros((2*N_database,2))
-		self.values1 = np.zeros((N_database,2))
-		self.values1_init = np.zeros((2*N_database,2))
-		self.step_num = 0
-		self.observation_space = spaces.Discrete(N_batch)
+		#self.action_space = spaces.Discrete(3)
+		#self.compress_frac = 0.5
+		#self.observation_space = spaces.Discrete(3)
+		#N_database = 1
+		#N_batch = 1
+		#self.N_database = N_database
+		#self.N_batch = N_batch
+		#self.index0 = np.arange(N_database)
+		#self.index1 = np.arange(2*N_database)
+		#self.col = pd.read_csv("dns.col")
+		#self.df0 = pd.DataFrame(index=self.index0, columns=self.col.columns)
+		#self.df1 = pd.DataFrame(index=self.index1, columns=self.col.columns)
+		#self.values0 = np.zeros((N_database,2))
+		#self.values0_init = np.zeros((2*N_database,2))
+		#self.values1 = np.zeros((N_database,2))
+		#self.values1_init = np.zeros((2*N_database,2))
+		#self.step_num = 0
+		#self.observation_space = spaces.Discrete(N_batch)
 		pass
 
 	def __myinit__(self, env_config = #Eventually switch this with just None
@@ -42,16 +42,16 @@ class broEnv(gym.Env):
 		"name": ['deletion','Hot','Warm','Cold'],			# Names to identify different storage formats
 		"ds_size": [10, 20, 40],							# Number of lines in each datastore
 		"ds_frac": [1, 0.5, 0.25],							# Value coefficient associated with each storage option
-		"val_weight": [[1,1,1][1,1,1],[1,1,1]],								# Weights applied to each value column
+		"val_weight": [[1,1,1],[1,1,1],[1,1,1]],								# Weights applied to each value column
 		"val_func": linear_val_func,# function for determining total value from various value columns
 		"ds_decay": [0.9, 0.95, 0.99],						# Rate at which Value decays in each DataStore
 		"vals": [pd.DataFrame(index = np.arange(10),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
 				   pd.DataFrame(index = np.arange(20),columns=['Age','Key Terrain','Queries']),
-				   pd.DataFrame(np.zeros((40,3)),columns=['Age','Key Terrain','Queries'])],
+				   pd.DataFrame(index = np.arange(40),columns=['Age','Key Terrain','Queries'])],
 		"init_rplan": [np.hstack((np.mgrid[0:10, 1:4][1],np.zeros(10).reshape(-1,1))),
 						np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1))),
 						np.hstack((np.mgrid[0:40, 1:4][1],np.zeros(40).reshape(-1,1)))], #Initially start with a hot to cold retention plan for data
-		"ind": [np.zeros((10,3)),np.zeros((20,3)),np.zeros((40,3))], #All data is initialized to the first step of it's rplan
+		"ind": [np.zeros(10),np.zeros(20),np.zeros(40)], #All data is initialized to the first step of it's rplan
 		"init_expir": [np.ones((10,3))*20,np.ones((20,3))*20,np.ones((40,3))*20], #Data 20 time steps old must be re-evaluated
 		"df": [pd.DataFrame(index = np.arange(10),columns=['label0']),		# Dataframes that hold actual datastore contents
 			   pd.DataFrame(index = np.arange(20),columns=['label0']),
@@ -68,31 +68,30 @@ class broEnv(gym.Env):
 		self.col = pd.read_csv(env_config.get("col","dns.col"))
 		# Define size variables
 		self.N_batch = env_config.get("N_batch", 5)
+		self.ds_size = env_config.get("ds_size",[10, 20, 40])
 		self.num_ds = len(self.ds_size)
-
 		self.action_space = env_config.get("action_space", spaces.Discrete(self.num_ds)) 	#Actions are now proceed with current retention plan or
 																				# move to next step in retention plan
 		# Observations #
 		self.observation_space = env_config.get("observation_space",spaces.Discrete(self.N_batch))
 		# Size of the data storage options
-		self.ds_size = env_config.get("ds_size",[10, 20, 40])
 		self.ds_frac = env_config.get("ds_frac",[1, 0.5, 0.25])
 		self.val_weight = env_config.get("val_weight",[[1,1,1],[1,1,1],[1,1,1]])
 		self.val_func = env_config.get("val_func", linear_val_func) # Note this is different from DataStore implementation
 		self.ds_decay = env_config.get("ds_decay",[0.9, 0.95, 0.99])
-		self.vals = env_config.get('vals',[pd.DataFrame(np.zeros((10,3)),columns=['Age','Key Terrain','Queries']),
-											   pd.DataFrame(np.zeros((20,3)),columns=['Age','Key Terrain','Queries']),
-											   pd.DataFrame(np.zeros((40,3)),columns=['Age','Key Terrain','Queries'])])
+		self.vals = env_config.get('vals',[pd.DataFrame(index = np.arange(10),columns=['Age','Key Terrain','Queries']),
+											   pd.DataFrame(index = np.arange(20),columns=['Age','Key Terrain','Queries']),
+											   pd.DataFrame(index = np.arange(40),columns=['Age','Key Terrain','Queries'])])
 		self.df = env_config.get('df', [pd.DataFrame(index = np.arange(10),columns=self.col),
 										pd.DataFrame(index = np.arange(20),columns=self.col),
 										pd.DataFrame(index = np.arange(40),columns=self.col)])
 		self.init_rplan = env_config.get("init_rplan",[np.mgrid[0:10, 1:4][1],np.mgrid[0:20, 1:4][1],np.mgrid[0:40, 1:4][1]])
-		self.ind = env_config.get("ind", [np.zeros((10,3)),np.zeros((20,3)),np.zeros((40,3))])
+		self.ind = env_config.get("ind", [np.zeros(10),np.zeros(20),np.zeros(40)])
 		self.init_expir = env_config.get("init_expir",[np.ones(10)*20,np.ones(20)*20,np.ones(40)*20])
 		self.ds = {}
 		self.names = env_config.get("name",['deletion','Hot','Warm','Cold'])
 		for i in np.arange(self.num_ds):
-			self.addDataStore(self.names[i+1], i, self.ds_size[i], self.ds_frac[i], self.val_weight[i], self.val_func, # i+1 to skip deletion name
+			self.addDataStore(self.names[i+1], i+1, self.ds_size[i], self.ds_frac[i], self.val_weight[i], self.val_func, # i+1 to skip deletion name
 						  self.ds_decay[i], self.vals[i], self.init_rplan[i], self.ind[i], self.init_expir[i], self.df[i])
 
 		# Steps/Observations #
@@ -113,9 +112,9 @@ class broEnv(gym.Env):
 	def batch_reset(self):
 		self.step_num = 0
 		for i in np.arange(self.num_ds):
-			ds = self.ds[self.names[i]]
-			for j in np.arange():
-				ds.DataBatch.batch[j].metaData.val = np.copy(ds.DataBatch.batch[j].val) #Refresh metaData of all DataStores
+			ds = self.ds[self.names[i+1]]
+			for j in np.arange(ds.dataBatch.size):
+				ds.dataBatch.batch[j].metaData.val = np.copy(ds.dataBatch.batch[j].val) #Refresh metaData of all DataStores
 		return self.step_num
 	
 	# An action is defined by:
@@ -134,7 +133,7 @@ class broEnv(gym.Env):
 				reward = ds.frac*ds.val_func(md.val) #Reward for saving current metaData to dataStore
 
 			val_arg = np.argmin(ds.dataBatch.get('val_tot',1), axis=0) #arg of the min value in dataStore
-			low_val_tot = ds.dataBatch[val_arg].metaData.val_tot	#val_tot of low_val
+			low_val_tot = ds.dataBatch.batch[val_arg].metaData.val_tot	#val_tot of low_val
 
 			if not np.isnan(low_val_tot): # If dataStore is full. this might not be 100% fool-proof though
 				low_val = ds.dataBatch.batch[val_arg].metaData.val #low_val in dataStore
@@ -148,7 +147,7 @@ class broEnv(gym.Env):
 	
 	# The step is doing the desired action and generating the RL variables
 	def step(self, action, dl):
-		reward = self._take_action(action, dl.metaData) ###!!!!###
+		reward = self._take_action(action, dl.metaData)
 		self.step_num += 1
 
 		obs = self.step_num

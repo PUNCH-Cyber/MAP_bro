@@ -4,14 +4,18 @@ from .data import *
 
 
 def linear_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.array([1,1,1]),decay = 0.9): #vals can be dataframe or series
-    if vals.ndim == 2: #DataFrame
-        no_nans = vals.notna #Not sure this is needed. Review when DataFrames are passed to val_func
-        val_tot = vals.values[no_nans,1:] * weights[1:]					# make use of broadcasting, avoid using age column.
-        decay = np.power(decay, vals.values[no_nans,0]).reshape([-1,1]) 	# decays vals according to age and decay factor of
+    if isinstance(vals,pd.DataFrame): #DataFrame
+        val_tot = vals.fillna(0).values[:,1:] * weights[1:]					# make use of broadcasting, avoid using age column.
+        decay = np.power(decay, vals.fillna(0).values[:,0]).reshape([-1,1]) 	# decays vals according to age and decay factor of
     # DataStore, and reshape array to prep for next step.
-    elif vals.ndim == 1: #Series
-        val_tot = vals.values[1:] * weights[1:]					# make use of broadcasting, avoid using age column.
-        decay = np.power(decay, vals.values[0]).reshape([-1,1]) 	# decays vals according to age and decay factor of
+    elif isinstance(vals,pd.Series): #Series
+        val_tot = vals.fillna(0).values[1:] * weights[1:]					# make use of broadcasting, avoid using age column.
+        decay = np.power(decay, vals.fillna(0).values[0]).reshape([-1,1]) 	# decays vals according to age and decay factor of
+    elif isinstance(vals, np.ndarray):
+        val_tot = np.nan_to_num(vals[1:]) * weights[1:]					# make use of broadcasting, avoid using age column.
+        decay = np.power(decay, np.nan_to_num(vals[0])).reshape([-1,1]) 	# decays vals according to age and decay factor of
+    elif isintance(vals, list):
+        print('ERROR')
     # DataStore, and reshape array to prep for next step.
     val_tot = np.sum(val_tot * decay, axis = 1)					# Sum all values in row for val_tot per row
     return val_tot
@@ -54,7 +58,6 @@ class DataStore(object):
             else: #Next step is another DataStore
                 next_ds = all_ds[names[next_ds_id]] # Grab DataStore associated with action
                 next_val_arg = np.argmin(next_ds.val_tot, axis=0)
-                low_val_tot = next_ds.val_tot[next_val_arg]
                 low_val = next_ds.val[next_val_arg]
 
                 if low_val != 0: # If next_ds is full. this might not be 100% fool-proof though
@@ -71,17 +74,16 @@ class DataStore(object):
 
         else: # Current DataStore is full! (currently same as decay version, but ultimately they will be different)
             curr_rplan_arg = np.argwhere(self.dataBatch.batch[val_arg].rplan == self.id_num)
-            next_ds_id = self.dataBatch.batch[val_arg].rplan[curr_rplan_arg+1] # Find the next DataStore in this data's retention plan
+            next_ds_id = int(self.dataBatch.batch[val_arg].rplan[curr_rplan_arg+1]) # Find the next DataStore in this data's retention plan
             val_tot = self.val_func(val)
             if next_ds_id == 0: #Next step is deletion
                 reward = -val_tot
             else: #Next step is another DataStore
-
                 next_ds = all_ds[names[next_ds_id]] # Grab DataStore associated with action
-                reward = next_ds.frac*next_ds.val_func(val, next_ds.val_weights, next_ds.decay) #Reward for saving current metaData to dataStore
+                reward = next_ds.frac*next_ds.val_func(val) #Reward for saving current metaData to dataStore
 
                 next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot',1), axis=0)
-                low_val_tot = next_ds.dataBatch[next_val_arg].metaData.val_tot
+                low_val_tot = next_ds.dataBatch.batch[next_val_arg].metaData.val_tot
 
                 if not np.isnan(low_val_tot): # If dataStore is full. this might not be 100% fool-proof though
                     low_val = next_ds.dataBatch.batch[next_val_arg].metaData.val #low_val in dataStore
@@ -93,6 +95,7 @@ class DataStore(object):
                 next_ds.dataBatch.batch[next_val_arg].metaData.val = val
                 next_ds.dataBatch.batch[next_val_arg].metaData.val_tot = val_tot
                 next_ds.dataBatch.batch[next_val_arg].metaData.ind = curr_rplan_arg + 1
+        print('reward',reward )
         return reward
 
 

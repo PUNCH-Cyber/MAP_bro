@@ -36,7 +36,7 @@ def delayed_reward_agent(env, db, lr, y, num_episodes):
 				a = np.random.choice(env.action_space.n)
 			#print(s, a)
 			#Get new state and reward from environment
-			s1,r,d,_ = env.step(a, db[s].metaData)
+			s1,r,d,_ = env.step(a, db.batch[s])
 			#Update Q-Table with new knowledge
 			Q[s,a] = Q[s,a] + lr*(r + y*np.max(Q[s1,:]) - Q[s,a])
 			rAll += r
