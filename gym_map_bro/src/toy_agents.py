@@ -28,11 +28,12 @@ def delayed_reward_agent(env, db, lr, y, num_episodes):
 		while j < 99:
 			j+=1
 			#Choose an action by greedily (with noise) picking from Q table
-			epsilon = 1./(i+1.)
+			epsilon = 1./np.log10(i+1.)
 			rand = np.random.uniform(1.0)
 			if(rand > epsilon):
 				a = np.argmax(Q[s,:])
 			else:
+				print('RANDOM')
 				a = np.random.choice(env.action_space.n)
 			#print(s, a)
 			#Get new state and reward from environment
@@ -46,6 +47,7 @@ def delayed_reward_agent(env, db, lr, y, num_episodes):
 		#env.render()
 		#jList.append(j)
 		rList.append(rAll)
+		#print('Q is ',Q)
 	return Q, rList
 
 def greedy_agent(env, db, lr, y, num_episodes):

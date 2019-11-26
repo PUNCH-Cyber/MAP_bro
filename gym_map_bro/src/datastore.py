@@ -7,17 +7,20 @@ def linear_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.ar
     if isinstance(vals,pd.DataFrame): #DataFrame
         val_tot = vals.fillna(0).values[:,1:] * weights[1:]					# make use of broadcasting, avoid using age column.
         decay = np.power(decay, vals.fillna(0).values[:,0]).reshape([-1,1]) 	# decays vals according to age and decay factor of
-    # DataStore, and reshape array to prep for next step.
+                                                                            # DataStore, and reshape array to prep for next step.
+        val_tot = np.sum(val_tot * decay, axis = 1)
     elif isinstance(vals,pd.Series): #Series
-        val_tot = vals.fillna(0).values[1:] * weights[1:]					# make use of broadcasting, avoid using age column.
+        val_tot = vals.fillna(0).values[1:].reshape(-1,1) * weights[1:]					# make use of broadcasting, avoid using age column.
         decay = np.power(decay, vals.fillna(0).values[0]).reshape([-1,1]) 	# decays vals according to age and decay factor of
+        val_tot = np.sum(val_tot * decay, axis = 1)[0]
     elif isinstance(vals, np.ndarray):
-        val_tot = np.nan_to_num(vals[1:]) * weights[1:]					# make use of broadcasting, avoid using age column.
-        decay = np.power(decay, np.nan_to_num(vals[0])).reshape([-1,1]) 	# decays vals according to age and decay factor of
+        tmp = np.array(vals, dtype=np.float64)
+        val_tot = np.nan_to_num(tmp[1:]) * weights[1:]					# make use of broadcasting, avoid using age column.
+        decay = np.power(decay, np.nan_to_num(tmp[0])).reshape([-1,1]) 	# decays vals according to age and decay factor of
+        val_tot = np.sum(val_tot * decay, axis = 1)[0]
     elif isintance(vals, list):
         print('ERROR')
-    # DataStore, and reshape array to prep for next step.
-    val_tot = np.sum(val_tot * decay, axis = 1)					# Sum all values in row for val_tot per row
+
     return val_tot
 
 def squared_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.array([1,1,1]),decay = 0.9):
@@ -77,12 +80,13 @@ class DataStore(object):
             next_ds_id = int(self.dataBatch.batch[val_arg].rplan[curr_rplan_arg+1]) # Find the next DataStore in this data's retention plan
             val_tot = self.val_func(val)
             if next_ds_id == 0: #Next step is deletion
-                reward = -val_tot
+                reward = -self.frac*val_tot
             else: #Next step is another DataStore
                 next_ds = all_ds[names[next_ds_id]] # Grab DataStore associated with action
                 reward = next_ds.frac*next_ds.val_func(val) #Reward for saving current metaData to dataStore
 
                 next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot',1), axis=0)
+                #print('big',next_ds.dataBatch.get('val_tot',1))
                 low_val_tot = next_ds.dataBatch.batch[next_val_arg].metaData.val_tot
 
                 if not np.isnan(low_val_tot): # If dataStore is full. this might not be 100% fool-proof though
@@ -95,7 +99,6 @@ class DataStore(object):
                 next_ds.dataBatch.batch[next_val_arg].metaData.val = val
                 next_ds.dataBatch.batch[next_val_arg].metaData.val_tot = val_tot
                 next_ds.dataBatch.batch[next_val_arg].metaData.ind = curr_rplan_arg + 1
-        print('reward',reward )
         return reward
 
 
