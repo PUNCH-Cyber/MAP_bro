@@ -1,5 +1,6 @@
 import gym
 import numpy as np
+from gym import spaces
 
 env = gym.make('map-bro-v0')
 
@@ -14,7 +15,10 @@ def recommend(files, Q):
             print("File {}: {} recommendation: {}". format(i, files[i], action[r]))
 
 def delayed_reward_agent(env, db, lr, y, num_episodes):
-	Q = np.zeros([env.observation_space.n+1,env.action_space.n])
+
+	env.observation_space = spaces.Discrete(len(db.batch))
+	print('BATCHSIZE IS ',len(db.batch))
+	Q = np.zeros([env.observation_space.n+1,env.action_space.n])#np.zeros([env.observation_space.n+1,env.action_space.n])
 	# Set learning parameters
 	#create lists to contain total rewards and steps per episode
 	rList = []
@@ -92,8 +96,9 @@ def batch_load(env, db, num_episodes):
 	#Need to check if any of the data has expired
 	lr = .9
 	y = .95
-	#for i in np.arange(env.num_ds)[::-1]+1: #Go from cold to hot DataStores
-	#	expir_data, expir_values = env.check_expir(i)
+	for i in env.names[1:]: #Go from cold to hot DataStores
+		expir_dis = env.ds[i].get_expir()
+		db.add(expir_dis)
 	#	Q, rList = delayed_reward_agent(env, values, lr, y, num_episodes)
 	#	batch_actions = np.argmax(Q, axis=1)
 	#	env.time_step(expir_data, expir_values, batch_actions[0:5],0)

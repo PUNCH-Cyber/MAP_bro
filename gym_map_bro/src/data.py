@@ -15,8 +15,8 @@ class metaData(object):
 class dataItem(object):
     def __init__(self,data = pd.Series([0]) ,val = pd.Series([0]),val_tot = 0, ind = 0,rplan = [1,2,3,0]):
         self.data = data
-        self.val = val
-        self.val_tot = val_tot
+        self.val = val          # Vals stay constant regardless of what dataStore they are in.
+        self.val_tot = val_tot  # Val_tots are saved with associated frac's and weights
         self.ind = int(ind)
         self.rplan = rplan
         self.metaData = metaData(val,val_tot,int(ind),rplan)
@@ -46,6 +46,15 @@ class dataBatch(object):
                 else:
                     var.append(self.batch[i].metaData.__dict__[variable])
         return var
+
+    def save(self,di,arg,vf,action):
+        self.batch[arg] = di
+        self.batch[arg].val_tot = vf(di.val)
+        self.batch[arg].ind = np.argwhere(di.rplan == action)
+
+    def add(self,dis):
+        for i in np.arange(len(dis)):
+            self.batch.append(dis[i])
 
     def age_step(self, vf):
         for i in np.arange(self.size):

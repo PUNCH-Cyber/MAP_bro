@@ -52,7 +52,7 @@ class broEnv(gym.Env):
 						np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1))),
 						np.hstack((np.mgrid[0:40, 1:4][1],np.zeros(40).reshape(-1,1)))], #Initially start with a hot to cold retention plan for data
 		"ind": [np.zeros(10),np.zeros(20),np.zeros(40)], #All data is initialized to the first step of it's rplan
-		"init_expir": [np.ones((10,3))*20,np.ones((20,3))*20,np.ones((40,3))*20], #Data 20 time steps old must be re-evaluated
+		"init_expir": [20,20,20], #Data 20 time steps old must be re-evaluated
 		"df": [pd.DataFrame(index = np.arange(10),columns=['Age','Key Terrain','Queries']),		# Dataframes that hold actual datastore contents
 			   pd.DataFrame(index = np.arange(20),columns=['Age','Key Terrain','Queries']),
 			   pd.DataFrame(index = np.arange(40),columns=['Age','Key Terrain','Queries'])]
@@ -87,7 +87,7 @@ class broEnv(gym.Env):
 										pd.DataFrame(index = np.arange(40),columns=self.col)])
 		self.init_rplan = env_config.get("init_rplan",[np.mgrid[0:10, 1:4][1],np.mgrid[0:20, 1:4][1],np.mgrid[0:40, 1:4][1]])
 		self.ind = env_config.get("ind", [np.zeros(10),np.zeros(20),np.zeros(40)])
-		self.init_expir = env_config.get("init_expir",[np.ones(10)*20,np.ones(20)*20,np.ones(40)*20])
+		self.init_expir = env_config.get("init_expir",[20,20,20])
 		self.ds = {}
 		self.names = env_config.get("name",['deletion','Hot','Warm','Cold'])
 		for i in np.arange(self.num_ds):
@@ -182,8 +182,7 @@ class broEnv(gym.Env):
 				val_arg = np.argmin(ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
 				next_di = ds.dataBatch.batch[val_arg]
 				low_val_tot = next_di.val_tot	#val_tot of low_val
-				ds.dataBatch.batch[val_arg] = di #Need to make certain that this isn't overwriting next_di
-				ds.dataBatch.batch[val_arg].val_tot = ds.val_func(di.val)
+				ds.dataBatch.save(di,val_arg,ds.val_func,actions[i]) # save new dataItem
 
 				j = actions[i]+1
 				while not np.isnan(low_val_tot) and j <= self.num_ds: # If dataStore is full. this might not be 100% fool-proof though.
@@ -191,8 +190,7 @@ class broEnv(gym.Env):
 					next_ds = self.ds[self.names[j]]
 					next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
 					low_val_tot = next_ds.dataBatch.batch[next_val_arg].val_tot	#val_tot of low_val
-					next_ds.dataBatch.batch[next_val_arg] = next_di
-					next_ds.dataBatch.batch[next_val_arg].ind = np.argwhere(di.rplan == actions[i])
+					next_ds.dataBatch.save(next_di,next_val_arg,next_ds.val_func,ds.id_num)
 					j += 1
 					if j == 4:
 						self.del_val.append([next_ds.dataBatch.batch[next_val_arg].val.values[0],low_val_tot])

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from .data import *
+from itertools import compress
 
 
 def linear_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.array([1,1,1]),decay = 0.9): #vals can be dataframe or series
@@ -18,7 +19,7 @@ def linear_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.ar
         val_tot = np.nan_to_num(tmp[1:]) * weights[1:]					# make use of broadcasting, avoid using age column.
         decay = np.power(decay, np.nan_to_num(tmp[0])).reshape([-1,1]) 	# decays vals according to age and decay factor of
         val_tot = np.sum(val_tot * decay, axis = 1)[0]
-    elif isintance(vals, list):
+    elif isinstance(vals, list):
         print('ERROR')
 
     return val_tot
@@ -32,7 +33,7 @@ def max_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.array
 class DataStore(object):
     def __init__(self, id_num = 1, size = 10, frac = 1, val_weights = np.array([1,1,1]), val_func = linear_val_func, decay = 0.9,
                  val = pd.DataFrame(index = np.arange(10),columns=['value_label0']), rplan = np.mgrid[0:10, 1:4][1],
-                 ind = np.zeros(10),expir = np.ones(10)*20,data = pd.DataFrame([0],columns=['label0'])):
+                 ind = np.zeros(10),expir = 20,data = pd.DataFrame([0],columns=['label0'])):
 
 
         self.id_num = id_num            # Identification number of datastore
@@ -76,7 +77,7 @@ class DataStore(object):
             self.val.iloc[val_arg] = val
 
         else: # Current DataStore is full! (currently same as decay version, but ultimately they will be different)
-            curr_rplan_arg = np.argwhere(self.dataBatch.batch[val_arg].rplan == self.id_num)
+            curr_rplan_arg = np.argwhere(self.dataBatch.batch[val_arg].rplan == self.id_num)[0][0]
             next_ds_id = int(self.dataBatch.batch[val_arg].rplan[curr_rplan_arg+1]) # Find the next DataStore in this data's retention plan
             val_tot = self.val_func(val)
             if next_ds_id == 0: #Next step is deletion
@@ -116,12 +117,16 @@ class DataStore(object):
 
     def get_expir(self):
         val = self.dataBatch.get('val')
-        val_tot = self.dataBatch.get('val_tot')
-        rplan = self.dataBatch.get('rplan')
-        expired_data = val.loc[val['Age']>self.expir]
-        expired_values = val_tot[val['Age']>self.expir]
-        expired_rplan = rplan.loc[val['Age']>self.expir]
-        return expired_data, expired_values, expired_rplan
+        expired = (val['Age']>=self.expir) & (val['Age'].notna())
+        expired_dis = list(compress(self.dataBatch.batch, expired.values))
+        print(f'{len(expired_dis)} rows expired in {self.id_num}',val)
+        #val_tot = self.dataBatch.get('val_tot')
+        #expired_val_tots = val_tot[val['Age']>self.expir]
+        data = pd.DataFrame(index = np.arange(2), columns = val.columns) # Empty dataframe uesed to empty row that has decayed out
+        for i in np.arange(len(self.dataBatch.batch)): #Seems slow. find a better implementation
+            if expired.values[i]:
+                self.dataBatch.batch[i] = dataItem(data.iloc[0],data.iloc[0],np.nan,0,[1,2,3,0])
+        return expired_dis#, expired_val_tots
 
 class HotStore(DataStore): #E.g. Druid
     def __init__(self):
