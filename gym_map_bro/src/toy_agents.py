@@ -96,12 +96,48 @@ def batch_load(env, db, num_episodes):
 	#Need to check if any of the data has expired
 	lr = .9
 	y = .95
-	for i in env.names[1:]: #Go from cold to hot DataStores
+	for i in env.names[1:]:
 		expir_dis = env.ds[i].get_expir()
 		db.add(expir_dis)
-	#	Q, rList = delayed_reward_agent(env, values, lr, y, num_episodes)
-	#	batch_actions = np.argmax(Q, axis=1)
-	#	env.time_step(expir_data, expir_values, batch_actions[0:5],0)
+
+	#Training on incoming data
+	Q, rList = delayed_reward_agent(env, db, lr, y, num_episodes)
+	#Q, rList = greedy_agent(env, values, lr, y, num_episodes)
+	#print(Q)
+
+	# Determine best actions for the batch
+	batch_actions = np.argmax(Q, axis=1)
+	#print(batch_actions[0:5])
+
+	# Perform the recommended actions
+	env.time_step(db, batch_actions[0:5])
+
+def batch_load_static(env, db, num_episodes):
+	#Need to check if any of the data has expired
+	lr = .9
+	y = .95
+	for i in np.arange(env.num_ds)[::-1]+1: #Go from cold to hot DataStores
+		expir_dis = env.ds[i].get_expir() #Get expired dataItems
+		for j in np.arange(len(expir_dis)):
+			next_id = expir_dis[j].rplan[expir_dis[j].ind] #Get next step in rplan
+			next_ds = env.ds[next_id] # Grab DataStore associated with action
+			val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
+			next_di = next_ds.dataBatch.batch[val_arg]
+			low_val_tot = next_di.val_tot
+			next_ds.dataBatch.save(expir_dis[j],val_arg,next_ds.val_func,next_id)
+			next_id = next_di.rplan[next_di.ind]
+
+			while not np.isnan(low_val_tot) and next_id <= env.num_ds: # Continue cascade until you reach empty dataStore or deletion
+
+				next_ds = env.ds[next_id]
+				next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
+				low_val_tot = next_ds.dataBatch.batch[next_val_arg].val_tot	#val_tot of low_val
+				tmp = next_ds.dataBatch.batch[next_val_arg]
+				next_ds.dataBatch.save(next_di,next_val_arg,next_ds.val_func,next_id)
+				next_di = tmp
+				next_id = next_di.rplan[next_di.ind]
+				if next_id == 4:
+					env.del_val.append([next_ds.dataBatch.batch[next_val_arg].val.values[0],low_val_tot])
 
 	#Training on incoming data
 	Q, rList = delayed_reward_agent(env, db, lr, y, num_episodes)

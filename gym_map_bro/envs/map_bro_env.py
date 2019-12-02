@@ -153,8 +153,7 @@ class broEnv(gym.Env):
 	
 	# Decay function for values
 	# The value table will contain the current
-	def decay_step(self, val, rate):
-		val = val*rate
+
 	def inv_decay(self, val, n, rate):
 		return val*rate**(-n)
 
@@ -164,13 +163,6 @@ class broEnv(gym.Env):
 	# 1. Loop through recommendations and apply to database
 	# 2. Time labels are increased by 1 and the values are decayed
 	# 3. Values are applied to initial for next batch
-	def retention_fallout(self):
-		for i in np.arange(self.num_ds)[::-1]+1: #Go from cold to hot DataStores
-			current_ds = self.ds[self.names[i]] # Grab DataStore associated with action
-			data, val, rplan = current_ds.get_expir()
-			for j in np.arange(data.shape[0]):
-				rep_row = np.argmin(self.values0_init, axis=0)[1]
-
 	def time_step(self, db, actions):
 
 		for i in range(0,db.size):
@@ -191,7 +183,7 @@ class broEnv(gym.Env):
 					next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
 					low_val_tot = next_ds.dataBatch.batch[next_val_arg].val_tot	#val_tot of low_val
 					next_ds.dataBatch.save(next_di,next_val_arg,next_ds.val_func,ds.id_num)
-					j += 1
+					j += 1 #To make 100% general, this should probably be the next step in new dataItem's rplan, not just next increment
 					if j == 4:
 						self.del_val.append([next_ds.dataBatch.batch[next_val_arg].val.values[0],low_val_tot])
 
