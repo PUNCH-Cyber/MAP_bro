@@ -1,6 +1,7 @@
 import gym
 import numpy as np
 from gym import spaces
+import copy
 
 env = gym.make('map-bro-v0')
 
@@ -117,27 +118,31 @@ def batch_load_static(env, db, num_episodes):
 	lr = .9
 	y = .95
 	for i in np.arange(env.num_ds)[::-1]+1: #Go from cold to hot DataStores
-		expir_dis = env.ds[i].get_expir() #Get expired dataItems
+		expir_dis = env.ds[env.names[i]].get_expir() #Get expired dataItems
 		for j in np.arange(len(expir_dis)):
-			next_id = expir_dis[j].rplan[expir_dis[j].ind] #Get next step in rplan
-			next_ds = env.ds[next_id] # Grab DataStore associated with action
-			val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
-			next_di = next_ds.dataBatch.batch[val_arg]
-			low_val_tot = next_di.val_tot
-			next_ds.dataBatch.save(expir_dis[j],val_arg,next_ds.val_func,next_id)
-			next_id = next_di.rplan[next_di.ind]
+			next_id = expir_dis[j].rplan[expir_dis[j].ind+1] #Get next step in rplan
+			if next_id != 0:
+				next_ds = env.ds[env.names[next_id]] # Grab DataStore associated with action
+				val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
+				next_di = next_ds.dataBatch.batch[val_arg]
+				low_val_tot = next_di.val_tot
+				next_ds.dataBatch.save(expir_dis[j],val_arg,next_ds.val_func,next_id)
+				#print('CHECK',val_arg,next_di.val_tot,next_di.ind)
+				next_id = next_di.rplan[next_di.ind+1]
 
-			while not np.isnan(low_val_tot) and next_id <= env.num_ds: # Continue cascade until you reach empty dataStore or deletion
+				while not np.isnan(low_val_tot) and next_id != 0: # Continue cascade until you reach empty dataStore or deletion
+					next_ds = env.ds[env.names[next_id]]
+					next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
+					low_val_tot = next_ds.dataBatch.batch[next_val_arg].val_tot	#val_tot of low_val
+					tmp = copy.deepcopy(next_ds.dataBatch.batch[next_val_arg])
+					next_ds.dataBatch.save(next_di,next_val_arg,next_ds.val_func,next_id)
+					next_di = tmp
+					next_id = next_di.rplan[next_di.ind+1]
+					if next_id == 0:
+						env.del_val.append([next_ds.dataBatch.batch[next_val_arg].val.values[0],low_val_tot])
+			else:
+				env.del_val.append([expir_dis[j].val.values[0],expir_dis[j].val_tot])
 
-				next_ds = env.ds[next_id]
-				next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
-				low_val_tot = next_ds.dataBatch.batch[next_val_arg].val_tot	#val_tot of low_val
-				tmp = next_ds.dataBatch.batch[next_val_arg]
-				next_ds.dataBatch.save(next_di,next_val_arg,next_ds.val_func,next_id)
-				next_di = tmp
-				next_id = next_di.rplan[next_di.ind]
-				if next_id == 4:
-					env.del_val.append([next_ds.dataBatch.batch[next_val_arg].val.values[0],low_val_tot])
 
 	#Training on incoming data
 	Q, rList = delayed_reward_agent(env, db, lr, y, num_episodes)

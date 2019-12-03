@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 class metaData(object):
-    def __init__(self,val = pd.Series([0]),val_tot = 0,ind = 0,rplan = [1,2,3,0]):
+    def __init__(self,val = pd.Series([0]),val_tot = np.nan,ind = 0,rplan = [1,2,3,0]):
         self.val = val
         self.val_tot = val_tot
         self.ind = ind
@@ -13,7 +13,7 @@ class metaData(object):
 #        return
 
 class dataItem(object):
-    def __init__(self,data = pd.Series([0]) ,val = pd.Series([0]),val_tot = 0, ind = 0,rplan = [1,2,3,0]):
+    def __init__(self,data = pd.Series([0]) ,val = pd.Series([0]),val_tot = np.nan, ind = 0,rplan = [1,2,3,0]):
         self.data = data
         self.val = val          # Vals stay constant regardless of what dataStore they are in.
         self.val_tot = val_tot  # Val_tots are saved with associated frac's and weights
@@ -50,7 +50,9 @@ class dataBatch(object):
     def save(self,di,arg,vf,action):
         self.batch[arg] = di
         self.batch[arg].val_tot = vf(di.val)
-        self.batch[arg].ind = np.argwhere(di.rplan == action)
+        print('CHECK',[x for x in range(len(di.rplan)) if di.rplan[x] == action][0], action)
+        self.batch[arg].ind = [x for x in range(len(di.rplan)) if di.rplan[x] == action][0]
+        #self.batch[arg].ind = np.argwhere(di.rplan == action)[0][0]
 
     def add(self,dis):
         for i in np.arange(len(dis)):

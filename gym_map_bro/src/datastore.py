@@ -32,15 +32,15 @@ def max_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.array
 
 class DataStore(object):
     def __init__(self, id_num = 1, size = 10, frac = 1, val_weights = np.array([1,1,1]), val_func = linear_val_func, decay = 0.9,
-                 val = pd.DataFrame(index = np.arange(10),columns=['value_label0']), rplan = np.mgrid[0:10, 1:4][1],
-                 ind = np.zeros(10),expir = 20,data = pd.DataFrame([0],columns=['label0'])):
+                 val = pd.DataFrame(index = np.arange(10),columns=['value_label0']), rplan = np.mgrid[0:10, 1:4][1].astype(int),
+                 ind = np.zeros(10).astype(int),expir = 20,data = pd.DataFrame([0],columns=['label0'])):
 
 
         self.id_num = id_num            # Identification number of datastore
         self.size = size				# Number of lines that can be stored
         self.frac = frac				# How the value of data is weighted in this datastore
 
-        self.val_tot = val_func(val, val_weights, decay)	# Total weighted value for each line of data
+        self.val_tot = [np.nan for x in range(self.size)]	# Total weighted value for each line of data
         self.init_val = val.copy()						# The initial values of the data
         self.init_val_tot = np.copy(self.val_tot)			# Initial total weighted value
         self.val_weights = val_weights	# The weights associated with each value column
@@ -77,8 +77,8 @@ class DataStore(object):
             self.val.iloc[val_arg] = val
 
         else: # Current DataStore is full! (currently same as decay version, but ultimately they will be different)
-            curr_rplan_arg = np.argwhere(self.dataBatch.batch[val_arg].rplan == self.id_num)[0][0]
-            next_ds_id = int(self.dataBatch.batch[val_arg].rplan[curr_rplan_arg+1]) # Find the next DataStore in this data's retention plan
+            curr_rplan_arg = [x for x in range(len(self.dataBatch.batch[val_arg].rplan)) if self.dataBatch.batch[val_arg].rplan[x] == self.id_num][0]
+            next_ds_id = self.dataBatch.batch[val_arg].rplan[curr_rplan_arg+1] # Find the next DataStore in this data's retention plan
             val_tot = self.val_func(val)
             if next_ds_id == 0: #Next step is deletion
                 reward = -self.frac*val_tot
@@ -87,7 +87,6 @@ class DataStore(object):
                 reward = next_ds.frac*next_ds.val_func(val) #Reward for saving current metaData to dataStore
 
                 next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot',1), axis=0)
-                #print('big',next_ds.dataBatch.get('val_tot',1))
                 low_val_tot = next_ds.dataBatch.batch[next_val_arg].metaData.val_tot
 
                 if not np.isnan(low_val_tot): # If dataStore is full. this might not be 100% fool-proof though

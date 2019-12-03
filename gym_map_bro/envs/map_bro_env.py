@@ -48,10 +48,10 @@ class broEnv(gym.Env):
 		"vals": [pd.DataFrame(index = np.arange(10),columns=['Age','Key Terrain','Queries']),		# Values associated with each line of data
 				   pd.DataFrame(index = np.arange(20),columns=['Age','Key Terrain','Queries']),
 				   pd.DataFrame(index = np.arange(40),columns=['Age','Key Terrain','Queries'])],
-		"init_rplan": [np.hstack((np.mgrid[0:10, 1:4][1],np.zeros(10).reshape(-1,1))),
-						np.hstack((np.mgrid[0:20, 1:4][1],np.zeros(20).reshape(-1,1))),
-						np.hstack((np.mgrid[0:40, 1:4][1],np.zeros(40).reshape(-1,1)))], #Initially start with a hot to cold retention plan for data
-		"ind": [np.zeros(10),np.zeros(20),np.zeros(40)], #All data is initialized to the first step of it's rplan
+		"init_rplan": [np.hstack((np.mgrid[0:10, 1:4][1].astype(int),np.zeros(10).reshape(-1,1).astype(int))),
+						np.hstack((np.mgrid[0:20, 1:4][1].astype(int),np.zeros(20).reshape(-1,1).astype(int))),
+						np.hstack((np.mgrid[0:40, 1:4][1].astype(int),np.zeros(40).reshape(-1,1).astype(int)))], #Initially start with a hot to cold retention plan for data
+		"ind": [np.zeros(10).astype(int),np.zeros(20).astype(int),np.zeros(40).astype(int)], #All data is initialized to the first step of it's rplan
 		"init_expir": [20,20,20], #Data 20 time steps old must be re-evaluated
 		"df": [pd.DataFrame(index = np.arange(10),columns=['Age','Key Terrain','Queries']),		# Dataframes that hold actual datastore contents
 			   pd.DataFrame(index = np.arange(20),columns=['Age','Key Terrain','Queries']),
@@ -85,8 +85,8 @@ class broEnv(gym.Env):
 		self.df = env_config.get('df', [pd.DataFrame(index = np.arange(10),columns=self.col),
 										pd.DataFrame(index = np.arange(20),columns=self.col),
 										pd.DataFrame(index = np.arange(40),columns=self.col)])
-		self.init_rplan = env_config.get("init_rplan",[np.mgrid[0:10, 1:4][1],np.mgrid[0:20, 1:4][1],np.mgrid[0:40, 1:4][1]])
-		self.ind = env_config.get("ind", [np.zeros(10),np.zeros(20),np.zeros(40)])
+		self.init_rplan = env_config.get("init_rplan",[np.mgrid[0:10, 1:4][1].astype(int),np.mgrid[0:20, 1:4][1].astype(int),np.mgrid[0:40, 1:4][1].astype(int)])
+		self.ind = env_config.get("ind", [np.zeros(10).astype(int),np.zeros(20).astype(int),np.zeros(40).astype(int)])
 		self.init_expir = env_config.get("init_expir",[20,20,20])
 		self.ds = {}
 		self.names = env_config.get("name",['deletion','Hot','Warm','Cold'])
@@ -135,11 +135,12 @@ class broEnv(gym.Env):
 			if not np.isnan(low_val_tot): # If dataStore is full. this might not be 100% fool-proof though
 				low_val = ds.dataBatch.batch[val_arg].metaData.val #low_val in dataStore
 				unweighted_low_val = low_val/ds.frac #Need to remove old frac
-				reward +=  ds.evaluate(unweighted_low_val, val_arg,self.ds,self.names)
+				reward += ds.evaluate(unweighted_low_val, val_arg,self.ds,self.names)
 
 			ds.dataBatch.batch[val_arg].metaData.val = md.val
 			ds.dataBatch.batch[val_arg].metaData.val_tot = md.val_tot
-			ds.dataBatch.batch[val_arg].metaData.ind = np.argwhere(ds.dataBatch.batch[val_arg].metaData.rplan == action)
+			ds.dataBatch.batch[val_arg].metaData.ind = [x for x in range(len(ds.dataBatch.batch[val_arg].metaData.rplan))
+														if ds.dataBatch.batch[val_arg].metaData.rplan[x] == action][0] # np.argwhere(ds.dataBatch.batch[val_arg].metaData.rplan == action)
 		return reward
 	
 	# The step is doing the desired action and generating the RL variables
