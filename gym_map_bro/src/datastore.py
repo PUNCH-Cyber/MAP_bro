@@ -16,7 +16,7 @@ def linear_val_func(vals = pd.DataFrame(index=[0],columns = [0]),weights = np.ar
         val_tot = np.sum(val_tot * decay, axis = 1)[0]
     elif isinstance(vals, np.ndarray):
         tmp = np.array(vals, dtype=np.float64)
-        val_tot = np.nan_to_num(tmp[1:]) * weights[1:]					# make use of broadcasting, avoid using age column.
+        val_tot = np.nan_to_num(tmp[1:]).reshape(-1,1) * weights[1:]					# make use of broadcasting, avoid using age column.
         decay = np.power(decay, np.nan_to_num(tmp[0])).reshape([-1,1]) 	# decays vals according to age and decay factor of
         val_tot = np.sum(val_tot * decay, axis = 1)[0]
     elif isinstance(vals, list):
@@ -46,72 +46,35 @@ class DataStore(object):
         self.val_weights = val_weights	# The weights associated with each value column
         self.decay = decay				# Value decay coefficient for time decay
         self.expir = expir              # Expiration times associated with data retention plan
-        self.val_func = lambda val: val_func(val,self.val_weights,self.decay)		# Function for determining total value from various value columns
+        self.val_func = lambda val: self.frac*val_func(val,self.val_weights,self.decay)		# Function for determining total value from various value columns
 
         self.dataBatch = dataBatch(data,val,self.val_tot,ind,rplan) #Data and metadata stored in this dataStore
 
     def evaluate(self, val,val_arg, all_ds,names):
 
-        if val_arg == -1: # Let's make -1 the flag that the data is decaying?
-            pass
-            curr_rplan_arg = np.argwhere(self.rplan == self.id_num)
-            next_ds_id = self.rplan[val_arg][curr_rplan_arg+1] # Find the next DataStore in this data's retention plan
-            val_tot = self.val_func(val,self.val_weights,self.decay)
-            if next_ds_id == 0: #Next step is deletion
-                reward = -val_tot
-            else: #Next step is another DataStore
-                next_ds = all_ds[names[next_ds_id]] # Grab DataStore associated with action
-                next_val_arg = np.argmin(next_ds.val_tot, axis=0)
-                low_val = next_ds.val[next_val_arg]
+        # Current DataStore is full!
+        curr_rplan_arg = [x for x in range(len(self.dataBatch.batch[val_arg].rplan)) if self.dataBatch.batch[val_arg].rplan[x] == self.id_num][0]
+        next_ds_id = self.dataBatch.batch[val_arg].rplan[curr_rplan_arg+1] # Find the next DataStore in this data's retention plan
+        val_tot = self.val_func(val)
+        if next_ds_id == 0: #Next step is deletion
+            reward = -val_tot
+        else: #Next step is another DataStore
+            next_ds = all_ds[names[next_ds_id]] # Grab DataStore associated with action
+            reward = next_ds.val_func(val) #Reward for saving current metaData to dataStore
 
-                if low_val != 0: # If next_ds is full. this might not be 100% fool-proof though
-                    unweighted_low_val = low_val/next_ds.frac #Need to remove old frac
-                    reward = self.frac*val_tot + next_ds.evaluate(unweighted_low_val, next_val_arg,all_ds,names)
-                else:
-                    reward = self.frac*val_tot + next_ds.save(val)
+            next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot',1), axis=0)
+            low_val_tot = next_ds.dataBatch.batch[next_val_arg].metaData.val_tot
+
+            if not np.isnan(low_val_tot): # If dataStore is full. this might not be 100% fool-proof though
+                low_val = next_ds.dataBatch.batch[next_val_arg].metaData.val #low_val in dataStore
+                unweighted_low_val = low_val/next_ds.frac #Need to remove old frac
+                reward +=  next_ds.evaluate(unweighted_low_val, next_val_arg,all_ds,names)
 
             # Reward is the new value plus the cascade of rewards caused by transferring the old value
             # New value replaces old value
-            # Wait should this be happening in the evaluate step? BIG QUESTION!!!!!
-            self.val_tot[val_arg] = val_tot
-            self.val.iloc[val_arg] = val
-
-        else: # Current DataStore is full! (currently same as decay version, but ultimately they will be different)
-            curr_rplan_arg = [x for x in range(len(self.dataBatch.batch[val_arg].rplan)) if self.dataBatch.batch[val_arg].rplan[x] == self.id_num][0]
-            next_ds_id = self.dataBatch.batch[val_arg].rplan[curr_rplan_arg+1] # Find the next DataStore in this data's retention plan
-            val_tot = self.val_func(val)
-            if next_ds_id == 0: #Next step is deletion
-                reward = -self.frac*val_tot
-            else: #Next step is another DataStore
-                next_ds = all_ds[names[next_ds_id]] # Grab DataStore associated with action
-                reward = next_ds.frac*next_ds.val_func(val) #Reward for saving current metaData to dataStore
-
-                next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot',1), axis=0)
-                low_val_tot = next_ds.dataBatch.batch[next_val_arg].metaData.val_tot
-
-                if not np.isnan(low_val_tot): # If dataStore is full. this might not be 100% fool-proof though
-                    low_val = next_ds.dataBatch.batch[next_val_arg].metaData.val #low_val in dataStore
-                    unweighted_low_val = low_val/next_ds.frac #Need to remove old frac
-                    reward +=  next_ds.evaluate(unweighted_low_val, next_val_arg,all_ds,names)
-
-                # Reward is the new value plus the cascade of rewards caused by transferring the old value
-                # New value replaces old value
-                next_ds.dataBatch.batch[next_val_arg].metaData.val = val
-                next_ds.dataBatch.batch[next_val_arg].metaData.val_tot = val_tot
-                next_ds.dataBatch.batch[next_val_arg].metaData.ind = curr_rplan_arg + 1
-        return reward
-
-
-    def save(self, val): #Probably a better way to incorporate this behavior. Could do a lambda function of evaluate and just pass a special flag, like -2.
-        val_arg = np.argmin(self.va_tot, axis=0)
-        old_val_tot = self.val_tot[val_arg]
-        # Reward is the new value minus the old value
-        # New value replaces old value
-        val_tot = self.frac * self.val_func(val,self.val_weights,self.decay)
-        reward = val_tot - old_val_tot
-        self.val_tot[val_arg] = val_tot
-        self.val.iloc[val_arg] = self.frac*val
-
+            next_ds.dataBatch.batch[next_val_arg].metaData.val = val
+            next_ds.dataBatch.batch[next_val_arg].metaData.val_tot = val_tot
+            next_ds.dataBatch.batch[next_val_arg].metaData.ind = curr_rplan_arg + 1
         return reward
 
     def get_expir(self):

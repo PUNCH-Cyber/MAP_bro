@@ -18,7 +18,6 @@ def recommend(files, Q):
 def delayed_reward_agent(env, db, lr, y, num_episodes):
 
 	env.observation_space = spaces.Discrete(len(db.batch))
-	print('BATCHSIZE IS ',len(db.batch))
 	Q = np.zeros([env.observation_space.n+1,env.action_space.n])#np.zeros([env.observation_space.n+1,env.action_space.n])
 	# Set learning parameters
 	#create lists to contain total rewards and steps per episode
@@ -34,13 +33,12 @@ def delayed_reward_agent(env, db, lr, y, num_episodes):
 			j+=1
 			#Choose an action by greedily (with noise) picking from Q table
 			epsilon = 1./np.log10(i+1.)
-			rand = np.random.uniform(1.0)
+			rand = np.random.uniform(5.0)
 			if(rand > epsilon):
 				a = np.argmax(Q[s,:])
 			else:
-				print('RANDOM')
+				print('RANDOM',i)
 				a = np.random.choice(env.action_space.n)
-			#print(s, a)
 			#Get new state and reward from environment
 			s1,r,d,_ = env.step(a, db.batch[s])
 			#Update Q-Table with new knowledge
@@ -49,10 +47,7 @@ def delayed_reward_agent(env, db, lr, y, num_episodes):
 			s = s1
 			if d == True:
 				break
-		#env.render()
-		#jList.append(j)
 		rList.append(rAll)
-		#print('Q is ',Q)
 	return Q, rList
 
 def greedy_agent(env, db, lr, y, num_episodes):
@@ -104,11 +99,10 @@ def batch_load(env, db, num_episodes):
 	#Training on incoming data
 	Q, rList = delayed_reward_agent(env, db, lr, y, num_episodes)
 	#Q, rList = greedy_agent(env, values, lr, y, num_episodes)
-	#print(Q)
+	print(f'Q is {Q}')
 
 	# Determine best actions for the batch
 	batch_actions = np.argmax(Q, axis=1)
-	#print(batch_actions[0:5])
 
 	# Perform the recommended actions
 	env.time_step(db, batch_actions[0:5])
@@ -127,7 +121,6 @@ def batch_load_static(env, db, num_episodes):
 				next_di = next_ds.dataBatch.batch[val_arg]
 				low_val_tot = next_di.val_tot
 				next_ds.dataBatch.save(expir_dis[j],val_arg,next_ds.val_func,next_id)
-				#print('CHECK',val_arg,next_di.val_tot,next_di.ind)
 				next_id = next_di.rplan[next_di.ind+1]
 
 				while not np.isnan(low_val_tot) and next_id != 0: # Continue cascade until you reach empty dataStore or deletion
@@ -146,12 +139,9 @@ def batch_load_static(env, db, num_episodes):
 
 	#Training on incoming data
 	Q, rList = delayed_reward_agent(env, db, lr, y, num_episodes)
-	#Q, rList = greedy_agent(env, values, lr, y, num_episodes)
-	#print(Q)
 
 	# Determine best actions for the batch
 	batch_actions = np.argmax(Q, axis=1)
-	#print(batch_actions[0:5])
 
 	# Perform the recommended actions
 	env.time_step(db, batch_actions[0:5])

@@ -124,10 +124,11 @@ class broEnv(gym.Env):
 		else:
 			md_ds_arg = md.rplan[md.ind] #which dataStore is the data currently in
 			ds = self.ds[self.names[action]] # Grab DataStore associated with action
+
 			if ds.id_num < md_ds_arg:
 				reward = -10 #negative reward associated with choosing a previous dataStore in retention plan
 			else:
-				reward = ds.frac*ds.val_func(md.val) #Reward for saving current metaData to dataStore
+				reward = ds.val_func(md.val) #Reward for saving current metaData to dataStore
 			val_arg = np.argmin(ds.dataBatch.get('val_tot',1), axis=0) #arg of the min value in dataStore
 
 			low_val_tot = ds.dataBatch.batch[val_arg].metaData.val_tot	#val_tot of low_val
@@ -149,7 +150,7 @@ class broEnv(gym.Env):
 		self.step_num += 1
 
 		obs = self.step_num
-		done = self.step_num == self.N_batch
+		done = self.step_num == self.observation_space.n
 		return obs, reward, done, {}
 	
 	# Decay function for values
@@ -169,6 +170,7 @@ class broEnv(gym.Env):
 		for i in range(0,db.size):
 			di = db.batch[i] #dataItem
 			if actions[i] == 0:
+				print('BOOM', di.val_tot)
 				self.del_val.append([np.nan_to_num(di.val.values[0]),di.val_tot])
 			else:
 				ds = self.ds[self.names[actions[i]]] # Grab DataStore associated with action
@@ -177,18 +179,30 @@ class broEnv(gym.Env):
 				low_val_tot = next_di.val_tot	#val_tot of low_val
 				ds.dataBatch.save(di,val_arg,ds.val_func,actions[i]) # save new dataItem
 
-				j = actions[i]+1
-				while not np.isnan(low_val_tot) and j <= self.num_ds: # If dataStore is full. this might not be 100% fool-proof though.
+				j_arg = [x for x in range(len(next_di.rplan)) if next_di.rplan[x] == ds.id_num][0] + 1 #actions[i]+1
+				j = next_di.rplan[j_arg]
+				print(f'{self.names[actions[i]]} is full. kicking out {low_val_tot}')
+				print(f'{self.names[actions[i]]}s val_tots are {ds.dataBatch.get("val_tot")}')
+				bb = 0
+				while not np.isnan(low_val_tot) and j != 0: # If dataStore is full. this might not be 100% fool-proof though.
 																	# Keep moving down the line until you reach a dataStore that has space or deletion
+					current_di = next_di
 					next_ds = self.ds[self.names[j]]
 					next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
 					low_val_tot = next_ds.dataBatch.batch[next_val_arg].val_tot	#val_tot of low_val
-					next_ds.dataBatch.save(next_di,next_val_arg,next_ds.val_func,ds.id_num)
-					j += 1 #To make 100% general, this should probably be the next step in new dataItem's rplan, not just next increment
-					if j == 4:
+					print(f'{self.names[j]}s lowest value is {low_val_tot}, BOUNCE {bb}')
+					#print(f'{self.names[j]}s ages are {next_ds.dataBatch.get("val")}')
+					#print(f'{self.names[j]}s val_tots are {next_ds.dataBatch.get("val_tot")}')
+					next_di = next_ds.dataBatch.batch[val_arg]
+					j_arg = [x for x in range(len(next_di.rplan)) if next_di.rplan[x] == next_ds.id_num][0] + 1# += 1
+					j = next_di.rplan[j_arg]
+					if not np.isnan(next_ds.dataBatch.batch[next_val_arg].val.values[0]) and j == 0:
+						print('FIYAH', next_ds.dataBatch.batch[next_val_arg].val,low_val_tot)
 						self.del_val.append([next_ds.dataBatch.batch[next_val_arg].val.values[0],low_val_tot])
+					next_ds.dataBatch.save(current_di,next_val_arg,next_ds.val_func,next_ds.id_num)
+					bb+=1
 
-		for i in np.arange(self.num_ds):
+		for i in np.arange(self.num_ds): #Age all dataItems in dataStores by 1 timestep
 			self.ds[self.names[i+1]].dataBatch.age_step(self.ds[self.names[i+1]].val_func)
 
 	

@@ -50,9 +50,7 @@ class dataBatch(object):
     def save(self,di,arg,vf,action):
         self.batch[arg] = di
         self.batch[arg].val_tot = vf(di.val)
-        print('CHECK',[x for x in range(len(di.rplan)) if di.rplan[x] == action][0], action)
         self.batch[arg].ind = [x for x in range(len(di.rplan)) if di.rplan[x] == action][0]
-        #self.batch[arg].ind = np.argwhere(di.rplan == action)[0][0]
 
     def add(self,dis):
         for i in np.arange(len(dis)):
@@ -61,4 +59,5 @@ class dataBatch(object):
     def age_step(self, vf):
         for i in np.arange(self.size):
             self.batch[i].val[0] += 1
-            self.batch[i].val_tot = vf(self.batch[i].val)
+            if not np.isnan(self.batch[i].val_tot): # don't want to update nan's to 0's
+                self.batch[i].val_tot = vf(self.batch[i].val) # update val_tot with new vals
