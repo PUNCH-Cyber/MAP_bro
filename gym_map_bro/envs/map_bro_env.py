@@ -183,6 +183,8 @@ class broEnv(gym.Env):
 				j = next_di.rplan[j_arg]
 				print(f'{self.names[actions[i]]} is full. kicking out {low_val_tot}')
 				print(f'{self.names[actions[i]]}s val_tots are {ds.dataBatch.get("val_tot")}')
+				if not np.isnan(low_val_tot) and j == 0: # Cold is full! So kicked out data is deleted.
+					self.del_val.append([np.nan_to_num(next_di.val.values[0]),next_di.val_tot])
 				bb = 0
 				while not np.isnan(low_val_tot) and j != 0: # If dataStore is full. this might not be 100% fool-proof though.
 																	# Keep moving down the line until you reach a dataStore that has space or deletion
@@ -221,7 +223,7 @@ class broEnv(gym.Env):
 			for i in np.arange(self.num_ds):
 				sub.scatter(time[self.names[i+1]], value[self.names[i+1]], color=clr[i], alpha=1.0, label=self.names[i+1])
 
-			print('deldel',self.del_val)
+			print('deldel',self.del_val, len(self.del_val))
 			x_val = [x[0] for x in self.del_val]
 			y_val = [x[1] for x in self.del_val]
 			sub.scatter(np.array(x_val),-np.array(y_val),color="g", label="Deleted")

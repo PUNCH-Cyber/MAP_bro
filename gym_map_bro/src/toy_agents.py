@@ -105,7 +105,7 @@ def batch_load(env, db, num_episodes):
 	batch_actions = np.argmax(Q, axis=1)
 
 	# Perform the recommended actions
-	env.time_step(db, batch_actions[0:5])
+	env.time_step(db, batch_actions[0:db.size])
 
 def batch_load_static(env, db, num_episodes):
 	#Need to check if any of the data has expired
@@ -122,6 +122,8 @@ def batch_load_static(env, db, num_episodes):
 				low_val_tot = next_di.val_tot
 				next_ds.dataBatch.save(expir_dis[j],val_arg,next_ds.val_func,next_id)
 				next_id = next_di.rplan[next_di.ind+1]
+				if not np.isnan(low_val_tot) and next_id == 0: # Cold is full! So kicked out data is deleted.
+					env.del_val.append([np.nan_to_num(next_di.val.values[0]),next_di.val_tot])
 
 				while not np.isnan(low_val_tot) and next_id != 0: # Continue cascade until you reach empty dataStore or deletion
 					next_ds = env.ds[env.names[next_id]]

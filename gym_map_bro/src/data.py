@@ -55,6 +55,7 @@ class dataBatch(object):
     def add(self,dis):
         for i in np.arange(len(dis)):
             self.batch.append(dis[i])
+        self.size = len(self.batch)
 
     def age_step(self, vf):
         for i in np.arange(self.size):
