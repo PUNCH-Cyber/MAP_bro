@@ -113,6 +113,7 @@ class broEnv(gym.Env):
 			ds = self.ds[self.names[i+1]]
 			for j in np.arange(ds.dataBatch.size):
 				ds.dataBatch.batch[j].metaData.val = np.copy(ds.dataBatch.batch[j].val) #Refresh metaData of all DataStores
+				ds.dataBatch.batch[j].metaData.val_tot = np.copy(ds.dataBatch.batch[j].val_tot)
 		return self.step_num
 	
 	# An action is defined by:
@@ -126,6 +127,7 @@ class broEnv(gym.Env):
 			ds = self.ds[self.names[action]] # Grab DataStore associated with action
 
 			if ds.id_num < md_ds_arg:
+				print('OOOOPS')
 				reward = -10 #negative reward associated with choosing a previous dataStore in retention plan
 			else:
 				reward = ds.val_func(md.val) #Reward for saving current metaData to dataStore
@@ -213,7 +215,7 @@ class broEnv(gym.Env):
 		value = {}
 		for i in np.arange(self.num_ds):
 			ds = self.ds[self.names[i+1]]
-			print(self.names[i+1],ds.dataBatch.get('val'))
+			#print(self.names[i+1],ds.dataBatch.get('val'))
 			time[self.names[i+1]] = ds.dataBatch.get('val')['Age'].values
 			value[self.names[i+1]] = self.inv_decay(ds.dataBatch.get('val_tot'),time[self.names[i+1]],ds.decay)
 
@@ -231,7 +233,7 @@ class broEnv(gym.Env):
 			sub.set_title('Age vs Initial Value')
 			sub.set_xlabel('Age')
 			sub.set_ylabel('Value')
-			sub.legend(loc=2)
+			sub.legend(loc='best')
 			plt.show()
 			plt.close()
 		elif(out == 1):

@@ -32,7 +32,7 @@ def delayed_reward_agent(env, db, lr, y, num_episodes):
 		while j < 99:
 			j+=1
 			#Choose an action by greedily (with noise) picking from Q table
-			epsilon = 1./np.log10(i+1.)
+			epsilon = 0#1./np.log10(i+1.)
 			rand = np.random.uniform(5.0)
 			if(rand > epsilon):
 				a = np.argmax(Q[s,:])
