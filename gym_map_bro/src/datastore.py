@@ -81,11 +81,12 @@ class DataStore(object):
         val = self.dataBatch.get('val')
         expired = (val['Age']>=self.expir) & (val['Age'].notna())
         expired_dis = list(compress(self.dataBatch.batch, expired.values))
-        #print(f'{len(expired_dis)} rows expired in {self.id_num}',val)
+        print(f'{len(expired_dis)} rows expired in {self.id_num}',val)
         data = pd.DataFrame(index = np.arange(2), columns = val.columns) # Empty dataframe uesed to empty row that has decayed out
         for i in np.arange(len(self.dataBatch.batch)): #Seems slow. find a better implementation
             if expired.values[i]:
                 self.dataBatch.batch[i] = dataItem(data.iloc[0],data.iloc[0],np.nan,0,[1,2,3,0])
+
         return expired_dis
 
 class HotStore(DataStore): #E.g. Druid

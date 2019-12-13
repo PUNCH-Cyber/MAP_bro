@@ -8,9 +8,6 @@ class metaData(object):
         self.ind = ind
         self.rplan = rplan
 
-#    def save(self,val,val_arg):
-#        self.val[val_arg] = val
-#        return
 
 class dataItem(object):
     def __init__(self,data = pd.Series([0]) ,val = pd.Series([0]),val_tot = np.nan, ind = 0,rplan = [1,2,3,0]):
@@ -52,13 +49,14 @@ class dataBatch(object):
         self.batch[arg].val_tot = vf(di.val)
         self.batch[arg].ind = [x for x in range(len(di.rplan)) if di.rplan[x] == action][0]
 
-    def add(self,dis):
+    def add(self,dis): # add expired di's too incoming dataBatch
         for i in np.arange(len(dis)):
             self.batch.append(dis[i])
         self.size = len(self.batch)
 
     def age_step(self, vf):
         for i in np.arange(self.size):
-            self.batch[i].val[0] += 1
+            self.batch[i].val['Age'] += 1
             if not np.isnan(self.batch[i].val_tot): # don't want to update nan's to 0's
                 self.batch[i].val_tot = vf(self.batch[i].val) # update val_tot with new vals
+

@@ -172,7 +172,7 @@ class broEnv(gym.Env):
 		for i in range(0,db.size):
 			di = db.batch[i] #dataItem
 			if actions[i] == 0:
-				print('BOOM', di.val_tot)
+				#print('BOOM', di.val_tot)
 				self.del_val.append([np.nan_to_num(di.val.values[0]),di.val_tot])
 			else:
 				ds = self.ds[self.names[actions[i]]] # Grab DataStore associated with action
@@ -183,10 +183,13 @@ class broEnv(gym.Env):
 
 				j_arg = [x for x in range(len(next_di.rplan)) if next_di.rplan[x] == ds.id_num][0] + 1 #actions[i]+1
 				j = next_di.rplan[j_arg]
-				print(f'{self.names[actions[i]]} is full. kicking out {low_val_tot}')
-				print(f'{self.names[actions[i]]}s val_tots are {ds.dataBatch.get("val_tot")}')
+				#print(f'{self.names[actions[i]]} is full. kicking out {low_val_tot}')
+				#print(f'{self.names[actions[i]]}s val_tots are {ds.dataBatch.get("val_tot")}')
 				if not np.isnan(low_val_tot) and j == 0: # Cold is full! So kicked out data is deleted.
+					val = ds.dataBatch.get('val')
 					self.del_val.append([np.nan_to_num(next_di.val.values[0]),next_di.val_tot])
+					data = pd.DataFrame(index = np.arange(2), columns = val.columns) # Empty dataframe uesed to empty row that has decayed out
+					ds.dataBatch.batch[val_arg] = dataItem(data.iloc[0],data.iloc[0],np.nan,0,[1,2,3,0])
 				bb = 0
 				while not np.isnan(low_val_tot) and j != 0: # If dataStore is full. this might not be 100% fool-proof though.
 																	# Keep moving down the line until you reach a dataStore that has space or deletion
@@ -195,27 +198,28 @@ class broEnv(gym.Env):
 					next_val_arg = np.argmin(next_ds.dataBatch.get('val_tot'), axis=0) #arg of the min value in dataStore
 					low_val_tot = next_ds.dataBatch.batch[next_val_arg].val_tot	#val_tot of low_val
 					print(f'{self.names[j]}s lowest value is {low_val_tot}, BOUNCE {bb}')
-					#print(f'{self.names[j]}s ages are {next_ds.dataBatch.get("val")}')
-					#print(f'{self.names[j]}s val_tots are {next_ds.dataBatch.get("val_tot")}')
-					next_di = next_ds.dataBatch.batch[val_arg]
+					next_di = next_ds.dataBatch.batch[next_val_arg]
 					j_arg = [x for x in range(len(next_di.rplan)) if next_di.rplan[x] == next_ds.id_num][0] + 1# += 1
 					j = next_di.rplan[j_arg]
-					if not np.isnan(next_ds.dataBatch.batch[next_val_arg].val.values[0]) and j == 0:
-						print('FIYAH', next_ds.dataBatch.batch[next_val_arg].val,low_val_tot)
+					if not np.isnan(next_ds.dataBatch.batch[next_val_arg].val.values[0]) and j == 0: # Cold is full! So kicked out data is deleted.
+						val = next_ds.dataBatch.get('val')
 						self.del_val.append([next_ds.dataBatch.batch[next_val_arg].val.values[0],low_val_tot])
+						data = pd.DataFrame(index = np.arange(2), columns = val.columns) # Empty dataframe uesed to empty row that has decayed out
+						next_ds.dataBatch.batch[next_val_arg] = dataItem(data.iloc[0],data.iloc[0],np.nan,0,[1,2,3,0])
 					next_ds.dataBatch.save(current_di,next_val_arg,next_ds.val_func,next_ds.id_num)
 					bb+=1
 
 		for i in np.arange(self.num_ds): #Age all dataItems in dataStores by 1 timestep
+			#print('before',self.names[i+1],self.ds[self.names[i+1]].dataBatch.get('val')['Age'])
 			self.ds[self.names[i+1]].dataBatch.age_step(self.ds[self.names[i+1]].val_func)
-
+			#print('after',self.names[i+1],self.ds[self.names[i+1]].size,self.ds[self.names[i+1]].dataBatch.get('val')['Age'])
 	
 	def render(self, mode='human', out=0, close=True):
 		time = {}
 		value = {}
 		for i in np.arange(self.num_ds):
 			ds = self.ds[self.names[i+1]]
-			#print(self.names[i+1],ds.dataBatch.get('val'))
+			print(self.names[i+1],ds.dataBatch.get('val'))
 			time[self.names[i+1]] = ds.dataBatch.get('val')['Age'].values
 			value[self.names[i+1]] = self.inv_decay(ds.dataBatch.get('val_tot'),time[self.names[i+1]],ds.decay)
 
