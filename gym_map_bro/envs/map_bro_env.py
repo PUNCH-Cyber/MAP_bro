@@ -51,7 +51,7 @@ class broEnv(gym.Env):
 		"init_rplan": [np.hstack((np.mgrid[0:10, 1:4][1].astype(int),np.zeros(10).reshape(-1,1).astype(int))),
 						np.hstack((np.mgrid[0:20, 1:4][1].astype(int),np.zeros(20).reshape(-1,1).astype(int))),
 						np.hstack((np.mgrid[0:40, 1:4][1].astype(int),np.zeros(40).reshape(-1,1).astype(int)))], #Initially start with a hot to cold retention plan for data
-		"ind": [np.zeros(10).astype(int),np.zeros(20).astype(int),np.zeros(40).astype(int)], #All data is initialized to the first step of it's rplan
+		"ind": [np.zeros(10).astype(int),np.zeros(20).astype(int)+1,np.zeros(40).astype(int)+2], #All data is initialized to the first step of it's rplan
 		"init_expir": [20,20,20], #Data 20 time steps old must be re-evaluated
 		"df": [pd.DataFrame(index = np.arange(10),columns=['Age','Key Terrain','Queries']),		# Dataframes that hold actual datastore contents
 			   pd.DataFrame(index = np.arange(20),columns=['Age','Key Terrain','Queries']),
@@ -237,6 +237,8 @@ class broEnv(gym.Env):
 			sub.set_title('Age vs Initial Value')
 			sub.set_xlabel('Age')
 			sub.set_ylabel('Value')
+			sub.set_xlim(-5,105)
+			sub.set_ylim(-1.2,2.2)
 			sub.legend(loc='best')
 			plt.show()
 			plt.close()
