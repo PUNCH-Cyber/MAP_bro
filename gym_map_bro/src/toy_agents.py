@@ -23,6 +23,7 @@ def delayed_reward_agent(env, db, lr, y, num_episodes):
 	# Set learning parameters
 	#create lists to contain total rewards and steps per episode
 	rList = []
+	print('derder', db.get('val'),db.get('val_tot'))
 	for i in range(num_episodes):
 		# Soft Reset environment to preserve value table
 		s = env.batch_reset()
@@ -33,7 +34,7 @@ def delayed_reward_agent(env, db, lr, y, num_episodes):
 		while j < 99:
 			j+=1
 			#Choose an action by greedily (with noise) picking from Q table
-			epsilon = 0#1./np.log10(i+1.)
+			epsilon = 1./np.log10(i+1.)
 			rand = np.random.uniform(5.0)
 			if(rand > epsilon):
 				a = np.argmax(Q[s,:])
@@ -49,6 +50,7 @@ def delayed_reward_agent(env, db, lr, y, num_episodes):
 			if d == True:
 				break
 		rList.append(rAll)
+
 	return Q, rList
 
 def greedy_agent(env, db, lr, y, num_episodes):

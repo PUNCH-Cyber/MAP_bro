@@ -59,4 +59,5 @@ class dataBatch(object):
             self.batch[i].val['Age'] += 1
             if not np.isnan(self.batch[i].val_tot): # don't want to update nan's to 0's
                 self.batch[i].val_tot = vf(self.batch[i].val) # update val_tot with new vals
+                print(self.batch[i].val_tot,self.batch[i].val[1],self.batch[i].val[2])
 

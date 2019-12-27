@@ -77,7 +77,7 @@ class broEnv(gym.Env):
 		# Size of the data storage options
 		self.ds_frac = env_config.get("ds_frac",[1, 0.5, 0.25])
 		self.val_weight = env_config.get("val_weight",[np.array([1,1,1]),np.array([1,1,1]),np.array([1,1,1])])
-		self.val_func = env_config.get("val_func", linear_val_func) # Note this is different from DataStore implementation
+		self.val_func = env_config.get("val_func", single_linear_val_func) # Note this is different from DataStore implementation
 		self.ds_decay = env_config.get("ds_decay",[0.9, 0.95, 0.99])
 		self.vals = env_config.get('vals',[pd.DataFrame(index = np.arange(10),columns=['Age','Key Terrain','Queries']),
 											   pd.DataFrame(index = np.arange(20),columns=['Age','Key Terrain','Queries']),
@@ -100,6 +100,7 @@ class broEnv(gym.Env):
 
 		self.deleted = pd.DataFrame(index=[], columns=self.col)
 		self.del_val = []
+		self.val_ind = 1
 		pass
 
 
@@ -121,7 +122,7 @@ class broEnv(gym.Env):
 	# Use next step in retention plan
 	def _take_action(self, action, md): # Might be able to make this a special case of evaluate
 		if action == 0: #Delete this data
-			reward = -self.val_func(md.val, self.val_weight, 1) #env val_func only takes val
+			reward = -self.val_func(md.val, self.val_weight, 1) #env val_func only takes val, -->>>> for single_linear_val# -self.val_func(md.val, self.val_ind, 1)
 		else:
 			md_ds_arg = md.rplan[md.ind] #which dataStore is the data currently in
 			ds = self.ds[self.names[action]] # Grab DataStore associated with action
@@ -138,10 +139,10 @@ class broEnv(gym.Env):
 			if not np.isnan(low_val_tot): # If dataStore is full. this might not be 100% fool-proof though
 				low_val = ds.dataBatch.batch[val_arg].metaData.val #low_val in dataStore
 				unweighted_low_val = low_val/ds.frac #Need to remove old frac
-				reward += ds.evaluate(unweighted_low_val, val_arg,self.ds,self.names)
+				reward += -low_val_tot + ds.evaluate(unweighted_low_val, val_arg,self.ds,self.names)
 
 			ds.dataBatch.batch[val_arg].metaData.val = md.val
-			ds.dataBatch.batch[val_arg].metaData.val_tot = md.val_tot
+			ds.dataBatch.batch[val_arg].metaData.val_tot = md.val_tot # MIGHT NEED TO CHANGE THIS as this val tot could be old - 12/27/19
 			ds.dataBatch.batch[val_arg].metaData.ind = [x for x in range(len(ds.dataBatch.batch[val_arg].metaData.rplan))
 														if ds.dataBatch.batch[val_arg].metaData.rplan[x] == action][0] # np.argwhere(ds.dataBatch.batch[val_arg].metaData.rplan == action)
 		return reward
@@ -172,7 +173,6 @@ class broEnv(gym.Env):
 		for i in range(0,db.size):
 			di = db.batch[i] #dataItem
 			if actions[i] == 0:
-				#print('BOOM', di.val_tot)
 				self.del_val.append([np.nan_to_num(di.val.values[0]),di.val_tot])
 			else:
 				ds = self.ds[self.names[actions[i]]] # Grab DataStore associated with action
@@ -183,8 +183,6 @@ class broEnv(gym.Env):
 
 				j_arg = [x for x in range(len(next_di.rplan)) if next_di.rplan[x] == ds.id_num][0] + 1 #actions[i]+1
 				j = next_di.rplan[j_arg]
-				#print(f'{self.names[actions[i]]} is full. kicking out {low_val_tot}')
-				#print(f'{self.names[actions[i]]}s val_tots are {ds.dataBatch.get("val_tot")}')
 				if not np.isnan(low_val_tot) and j == 0: # Cold is full! So kicked out data is deleted.
 					val = ds.dataBatch.get('val')
 					self.del_val.append([np.nan_to_num(next_di.val.values[0]),next_di.val_tot])
@@ -210,9 +208,8 @@ class broEnv(gym.Env):
 					bb+=1
 
 		for i in np.arange(self.num_ds): #Age all dataItems in dataStores by 1 timestep
-			#print('before',self.names[i+1],self.ds[self.names[i+1]].dataBatch.get('val')['Age'])
+			print('WAKAKA', self.names[i+1])
 			self.ds[self.names[i+1]].dataBatch.age_step(self.ds[self.names[i+1]].val_func)
-			#print('after',self.names[i+1],self.ds[self.names[i+1]].size,self.ds[self.names[i+1]].dataBatch.get('val')['Age'])
 	
 	def render(self, mode='human', out=0, close=True):
 		time = {}
